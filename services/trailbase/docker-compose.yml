@@ -1,0 +1,18 @@
+# TrailBase alone — this is what the Temps `tote-api` project deploys (its
+# root directory is services/trailbase, preset docker-compose). Local dev uses
+# the host `trail` binary via `pnpm dev`; the full local stack lives in the
+# repository root docker-compose.yml.
+name: tote_api
+
+services:
+  trailbase:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '127.0.0.1:4000:4000'
+    volumes:
+      - traildepot:/app/traildepot
+
+volumes:
+  traildepot:

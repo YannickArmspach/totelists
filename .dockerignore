@@ -1,0 +1,17 @@
+# Keep the build context to what the build actually needs. Everything here is
+# either rebuilt inside the image or must never reach it.
+.git
+.github
+node_modules
+**/node_modules
+apps/web/dist
+apps/web/.env
+apps/web/.env.*
+services/trailbase/traildepot/data
+services/trailbase/traildepot/secrets
+services/trailbase/traildepot/uploads
+services/trailbase/traildepot/backups
+services/trailbase/.admin-credentials.json
+.context
+*.log
+.DS_Store

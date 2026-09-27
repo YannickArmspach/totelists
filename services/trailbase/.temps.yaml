@@ -1,0 +1,8 @@
+# Read from this project's root directory, which is `services/trailbase`.
+#
+# TrailBase serves /api/healthcheck itself — it is in the upstream image's own
+# HEALTHCHECK — so there is nothing to add to the application for this.
+#
+# `health.path` is the only health field Temps acts on today.
+health:
+  path: /api/healthcheck

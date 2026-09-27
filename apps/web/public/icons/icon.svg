@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#3d7d54"/>
+  <!-- a tote bag -->
+  <path d="M156 200 h200 a12 12 0 0 1 12 12 l-14 168 a24 24 0 0 1 -24 22 H182 a24 24 0 0 1 -24 -22 l-14 -168 a12 12 0 0 1 12 -12 z"
+        fill="#faf8f2"/>
+  <path d="M196 226 v-40 a60 60 0 0 1 120 0 v40" fill="none" stroke="#faf8f2" stroke-width="26" stroke-linecap="round"/>
+  <!-- sound waves: say it -->
+  <path d="M232 292 v64 M256 276 v96 M280 292 v64" stroke="#3d7d54" stroke-width="18" stroke-linecap="round"/>
+</svg>

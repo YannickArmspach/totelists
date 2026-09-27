@@ -1,0 +1,137 @@
+/**
+ * The review inbox: everything the classifier (or quick-add) just bagged, as
+ * `new` items. Fix the routing if the AI guessed wrong, then promote.
+ */
+import { createFileRoute } from '@tanstack/react-router'
+import { useState } from 'react'
+import { ArrowRight, Trash2 } from 'lucide-react'
+
+import { itemsCollection, type ItemRow } from '#/db/collections'
+import { useAttachedMarkets, useToteItems } from '#/db/hooks'
+import { promote } from '#/lib/items'
+import { useActiveTote } from '#/stores/active-tote'
+import { Badge } from '#/components/ui/badge'
+import { Button } from '#/components/ui/button'
+import { Select } from '#/components/ui/input'
+import { Qty } from '#/components/qty'
+import { ItemEditDialog } from '#/components/item-edit-dialog'
+import { m } from '#/paraglide/messages'
+
+export const Route = createFileRoute('/_authed/inbox')({ component: InboxPage })
+
+function InboxPage() {
+  const { activeToteId } = useActiveTote()
+  const items = useToteItems(activeToteId)
+  const newItems = items
+    .filter((item) => item.status === 'new')
+    .sort((a, b) => b.id.localeCompare(a.id)) // newest first
+
+  const promoteAll = () => {
+    const patch = promote()
+    for (const item of newItems) {
+      itemsCollection.update(item.id, (draft) => Object.assign(draft, patch))
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">{m.inbox_title()}</h1>
+        {newItems.length > 1 && (
+          <Button variant="secondary" size="sm" onClick={promoteAll}>
+            {m.promote_all()}
+          </Button>
+        )}
+      </div>
+
+      {newItems.length === 0 ? (
+        <p className="pt-8 text-center text-sm text-muted-foreground">{m.inbox_empty()}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {newItems.map((item) => (
+            <InboxCard key={item.id} item={item} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function InboxCard({ item }: { item: ItemRow }) {
+  const attached = useAttachedMarkets(item.tote_id)
+  const [editing, setEditing] = useState(false)
+  const departments = attached.find((entry) => entry.market.id === item.market_id)?.departments ?? []
+  const department = departments.find((dept) => dept.id === item.department_id)
+
+  const patch = (updates: Partial<ItemRow>) =>
+    itemsCollection.update(item.id, (draft) => Object.assign(draft, updates))
+
+  return (
+    <li className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="min-w-0 flex-1 truncate text-left font-medium"
+        >
+          {item.title}
+          {item.description && (
+            <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+              {item.description}
+            </span>
+          )}
+        </button>
+        <Qty item={item} />
+        {department?.auto_created === 1 && <Badge variant="outline">{m.auto_created_badge()}</Badge>}
+      </div>
+
+      {attached.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          <Select
+            value={item.market_id ?? ''}
+            aria-label={m.market_label()}
+            onChange={(event) =>
+              patch({ market_id: event.target.value || null, department_id: null })
+            }
+          >
+            <option value="">{m.no_market()}</option>
+            {attached.map(({ market }) => (
+              <option key={market.id} value={market.id}>
+                {market.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={item.department_id ?? ''}
+            aria-label={m.department_label()}
+            disabled={!item.market_id}
+            onChange={(event) => patch({ department_id: event.target.value || null })}
+          >
+            <option value="">{m.no_department()}</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => itemsCollection.delete(item.id)}
+          aria-label={m.delete()}
+        >
+          <Trash2 />
+        </Button>
+        <Button size="sm" onClick={() => patch(promote())}>
+          {m.promote()} <ArrowRight />
+        </Button>
+      </div>
+
+      {editing && <ItemEditDialog item={item} onClose={() => setEditing(false)} />}
+    </li>
+  )
+}

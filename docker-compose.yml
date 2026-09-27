@@ -1,0 +1,44 @@
+# Builds and runs the whole stack: the TrailBase backend and the web app.
+#
+# The web bundle bakes VITE_* at BUILD time, and those URLs are what the
+# BROWSER dials — so VITE_TRAILBASE_URL must be the host-visible origin
+# (http://localhost:4000 here), never the compose-internal hostname.
+name: tote
+
+services:
+  trailbase:
+    build: ./services/trailbase
+    ports:
+      - '127.0.0.1:4000:4000'
+    environment:
+      PUBLIC_URL: ${TRAILBASE_PUBLIC_URL:-http://localhost:4000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    volumes:
+      - traildepot:/app/traildepot
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/api/healthcheck']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_TRAILBASE_URL: ${VITE_TRAILBASE_URL:-http://localhost:4000}
+        VITE_SITE_URL: ${VITE_SITE_URL:-http://localhost:3000}
+    environment:
+      WHISPER_URL: ${WHISPER_URL:-https://whisper-production.dev.ynk.one}
+      WHISPER_API_KEY: ${WHISPER_API_KEY:-}
+      MERIDIAN_URL: ${MERIDIAN_URL:-https://meridian.dev.ynk.one}
+      MERIDIAN_API_KEY: ${MERIDIAN_API_KEY:-}
+      FAKE_AI: ${FAKE_AI:-}
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      trailbase:
+        condition: service_healthy
+
+volumes:
+  traildepot:

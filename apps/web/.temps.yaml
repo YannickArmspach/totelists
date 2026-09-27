@@ -1,0 +1,4 @@
+# Read from this project's root directory, which is `apps/web`.
+# `health.path` is the only health field Temps acts on today.
+health:
+  path: /healthz

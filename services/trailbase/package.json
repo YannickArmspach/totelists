@@ -1,0 +1,8 @@
+{
+  "name": "@tote/trailbase",
+  "private": true,
+  "scripts": {
+    "dev": "trail run --cors-allowed-origins http://localhost:3000",
+    "admin:password": "trail user change-password admin@localhost"
+  }
+}

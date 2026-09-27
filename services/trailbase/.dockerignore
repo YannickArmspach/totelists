@@ -1,0 +1,11 @@
+# The depot's runtime state belongs to the volume, never to the image. These are
+# gitignored, so a platform build never sees them — but a local `docker build`
+# would, and baking a local database or private keys into an image is not a
+# mistake worth leaving available.
+traildepot/data
+traildepot/secrets
+traildepot/uploads
+traildepot/backups
+traildepot/wasm
+.admin-credentials.json
+node_modules
