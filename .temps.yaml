@@ -1,0 +1,5 @@
+# Read by the Temps `tote-web` project, whose root directory is the
+# repository root (its compose file is docker-compose.web.yml).
+# `health.path` is the only health field Temps acts on today.
+health:
+  path: /healthz

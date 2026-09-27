@@ -10,7 +10,9 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '127.0.0.1:4000:4000'
+      # Host port 4100, not 4000: several compose stacks share the deploy
+      # host's loopback, and trainloop's trailbase already owns 4000 there.
+      - '127.0.0.1:4100:4000'
     volumes:
       - traildepot:/app/traildepot
 
