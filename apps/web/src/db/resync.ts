@@ -34,10 +34,25 @@ const ALL_COLLECTIONS = [
 ] as const
 
 let resyncing = false
+const resyncListeners = new Set<() => void>()
+
+export function isResyncing(): boolean {
+  return resyncing
+}
+
+/** Fires when a resync starts or ends — the sync indicator listens. */
+export function onResyncChange(listener: () => void): void {
+  resyncListeners.add(listener)
+}
+
+function setResyncing(value: boolean): void {
+  resyncing = value
+  for (const listener of resyncListeners) listener()
+}
 
 export async function resyncAll(): Promise<void> {
   if (resyncing) return
-  resyncing = true
+  setResyncing(true)
   try {
     await Promise.all(
       ALL_COLLECTIONS.map(async (collection) => {
@@ -48,7 +63,7 @@ export async function resyncAll(): Promise<void> {
   } catch (error) {
     console.error('resync failed', error)
   } finally {
-    resyncing = false
+    setResyncing(false)
   }
 }
 

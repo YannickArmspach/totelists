@@ -119,6 +119,10 @@
   "logout": "Sign out",
   "language": "Language",
   "loading": "Loading…",
+  "sync_live": "Synced — tap to refresh",
+  "sync_syncing": "Syncing…",
+  "sync_offline": "Offline — changes will sync when you're back",
+  "sync_error": "Sync failed — tap to retry",
   "first_tote_title": "Create your first tote",
   "first_tote_hint": "A tote is a shopping list you can share. Give it a name — markets and departments can come later.",
   "not_found": "Nothing here."

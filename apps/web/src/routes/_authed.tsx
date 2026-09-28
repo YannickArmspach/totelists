@@ -14,6 +14,7 @@ import { hasStoredSession, logout } from '#/lib/auth'
 import { useHydrated, useMyTotes, useToteItems } from '#/db/hooks'
 import { installResyncOnResume } from '#/db/resync'
 import { InviteBanner } from '#/components/invite-banner'
+import { SyncIndicator } from '#/components/sync-indicator'
 import { useActiveTote } from '#/stores/active-tote'
 import { getLocale, locales, setLocale } from '#/paraglide/runtime'
 import { m } from '#/paraglide/messages'
@@ -89,6 +90,7 @@ function Header() {
         {m.my_totes()}
       </Link>
       <span className="flex-1" />
+      <SyncIndicator />
       <LocaleToggle />
       <button
         type="button"

@@ -119,6 +119,10 @@
   "logout": "Se déconnecter",
   "language": "Langue",
   "loading": "Chargement…",
+  "sync_live": "Synchronisé — touchez pour rafraîchir",
+  "sync_syncing": "Synchronisation…",
+  "sync_offline": "Hors ligne — vos changements partiront au retour du réseau",
+  "sync_error": "Échec de synchronisation — touchez pour réessayer",
   "first_tote_title": "Créez votre premier tote",
   "first_tote_hint": "Un tote est une liste de courses partageable. Donnez-lui un nom — magasins et rayons viendront après.",
   "not_found": "Rien ici."
