@@ -23,7 +23,9 @@ record_apis: [{
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
   create_access_rule: "_REQ_.created_by = _USER_.id"
-  read_access_rule: "_ROW_.visibility = 'public' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id)"
+  # Readable by members, by anyone for public totes, and by invitees — an
+  # invitation banner that can't name the tote invites nobody.
+  read_access_rule: "_ROW_.visibility = 'public' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _ROW_.id AND i.email = u.email COLLATE NOCASE)"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = 'owner')"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = 'owner')"
 }, {
@@ -34,14 +36,28 @@ record_apis: [{
   # The join rule. You may only insert yourself, and only when one of:
   #   1. the tote is public;
   #   2. you presented the current invite_code (private tote, link join);
-  #   3. you created the tote (bootstrap of the owner row).
+  #   3. you created the tote (bootstrap of the owner row);
+  #   4. your account email holds an invitation to it.
   # Role-escalation guard: 'owner' is insertable only by the tote creator.
-  create_access_rule: "_REQ_.user_id = _USER_.id AND (EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.visibility = 'public') OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.invite_code IS NOT NULL AND t.invite_code = _REQ_.joined_with_code) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id)) AND (_REQ_.role IS NULL OR _REQ_.role = 'member' OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id))"
+  create_access_rule: "_REQ_.user_id = _USER_.id AND (EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.visibility = 'public') OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.invite_code IS NOT NULL AND t.invite_code = _REQ_.joined_with_code) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _REQ_.tote_id AND i.email = u.email COLLATE NOCASE)) AND (_REQ_.role IS NULL OR _REQ_.role = 'member' OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id))"
   read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = 'public')"
   # Only owners touch roles.
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = 'owner')"
   # Leave (self) or kick (owner).
   delete_access_rule: "_ROW_.user_id = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = 'owner')"
+}, {
+  name: "tote_invites"
+  table_name: "tote_invites"
+  acl_authenticated: [CREATE, READ, UPDATE, DELETE]
+  enable_subscriptions: true
+  # Any member may invite; attribution is pinned.
+  create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id)"
+  # Visible to the tote's members (to manage) and to the invitee (to accept).
+  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = _ROW_.email COLLATE NOCASE)"
+  # Nothing on an invite is worth editing; revoke and re-invite instead.
+  update_access_rule: "FALSE"
+  # Revoke (member) or decline / consume-on-accept (invitee).
+  delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = _ROW_.email COLLATE NOCASE)"
 }, {
   name: "markets"
   table_name: "markets"

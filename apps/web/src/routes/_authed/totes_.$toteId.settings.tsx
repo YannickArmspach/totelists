@@ -6,10 +6,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Copy, RefreshCw } from 'lucide-react'
 
-import { toteMembersCollection, totesCollection } from '#/db/collections'
-import { useMyMembership, useTote, useToteMembers } from '#/db/hooks'
-import { useUser } from '#/lib/auth'
-import { newInviteCode } from '#/db/ids'
+import { toteInvitesCollection, toteMembersCollection, totesCollection } from '#/db/collections'
+import { useMyMembership, useTote, useToteInvites, useToteMembers } from '#/db/hooks'
+import { currentUserId, useUser } from '#/lib/auth'
+import { newId, newInviteCode } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -24,6 +24,7 @@ function ToteSettingsPage() {
   const { toteId } = Route.useParams()
   const tote = useTote(toteId)
   const members = useToteMembers(toteId)
+  const invites = useToteInvites(toteId)
   const membership = useMyMembership(toteId)
   const user = useUser()
   const navigate = useNavigate()
@@ -109,6 +110,56 @@ function ToteSettingsPage() {
           {isOwner && <p className="text-xs text-muted-foreground">{m.regenerate_hint()}</p>}
         </section>
       )}
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-muted-foreground">{m.invite_by_email()}</h2>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const input = event.currentTarget.elements.namedItem('email') as HTMLInputElement
+            const email = input.value.trim().toLowerCase()
+            if (!email) return
+            toteInvitesCollection.insert({
+              id: newId(),
+              tote_id: tote.id,
+              email,
+              created_by: currentUserId(),
+            })
+            input.value = ''
+            /*
+              The invite already works — it matches the account email in-app.
+              The mailto is the notification: the inviter's own mail client,
+              prefilled with the join link, since the server sends no mail.
+            */
+            if (inviteLink) {
+              const subject = encodeURIComponent(m.invite_mail_subject({ name: tote.name }))
+              const body = encodeURIComponent(m.invite_mail_body({ name: tote.name, link: inviteLink }))
+              window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`
+            }
+          }}
+        >
+          <Input name="email" type="email" placeholder={m.email_label()} required />
+          <Button type="submit" variant="secondary">
+            {m.invite_cta()}
+          </Button>
+        </form>
+        {invites.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {invites.map((invite) => (
+              <li key={invite.id} className="flex min-h-10 items-center gap-2 rounded-lg border bg-card px-3">
+                <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                  {invite.email}
+                </span>
+                <Badge variant="outline">{m.invite_pending()}</Badge>
+                <Button variant="ghost" size="sm" onClick={() => toteInvitesCollection.delete(invite.id)}>
+                  {m.revoke()}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-muted-foreground">{m.members_title()}</h2>

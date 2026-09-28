@@ -15,12 +15,14 @@ import {
   departmentsCollection,
   itemsCollection,
   marketsCollection,
+  toteInvitesCollection,
   toteMarketsCollection,
   toteMembersCollection,
   totesCollection,
   type DepartmentRow,
   type ItemRow,
   type MarketRow,
+  type ToteInviteRow,
   type ToteMarketRow,
   type ToteMemberRow,
   type ToteRow,
@@ -121,6 +123,40 @@ export function useMyMembership(toteId: string | null | undefined): ToteMemberRo
   const user = useUser()
   const members = useToteMembers(toteId)
   return members.find((row) => row.user_id === user?.id)
+}
+
+const NO_INVITES: ToteInviteRow[] = []
+
+function useInviteRows() {
+  return useLiveQuery({ query: (q) => q.from({ invites: toteInvitesCollection }) })
+}
+
+/** Pending invitations of one tote — the settings page's revoke list. */
+export function useToteInvites(toteId: string | null | undefined): ToteInviteRow[] {
+  const hydrated = useHydrated()
+  const { data } = useInviteRows()
+  return useMemo(
+    () =>
+      hydrated && toteId
+        ? data.filter((row) => row.tote_id === toteId).sort((a, b) => a.id.localeCompare(b.id))
+        : NO_INVITES,
+    [hydrated, data, toteId],
+  )
+}
+
+/** Invitations addressed to MY account email, for totes I'm not in yet. */
+export function useMyInvites(): ToteInviteRow[] {
+  const hydrated = useHydrated()
+  const user = useUser()
+  const { data: invites } = useInviteRows()
+  const { data: members } = useMemberRows()
+  return useMemo(() => {
+    const email = user?.email?.toLowerCase()
+    const userId = user?.id
+    if (!hydrated || !email || !userId) return NO_INVITES
+    const mine = new Set(members.filter((row) => row.user_id === userId).map((row) => row.tote_id))
+    return invites.filter((row) => row.email.toLowerCase() === email && !mine.has(row.tote_id))
+  }, [hydrated, user, invites, members])
 }
 
 /**

@@ -12,6 +12,7 @@ import { History, Inbox, LayoutGrid, LogOut, ShoppingBag, Store } from 'lucide-r
 
 import { hasStoredSession, logout } from '#/lib/auth'
 import { useHydrated, useMyTotes, useToteItems } from '#/db/hooks'
+import { InviteBanner } from '#/components/invite-banner'
 import { useActiveTote } from '#/stores/active-tote'
 import { getLocale, locales, setLocale } from '#/paraglide/runtime'
 import { m } from '#/paraglide/messages'
@@ -35,6 +36,7 @@ function AuthedLayout() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col">
       <Header />
+      <InviteBanner />
       <main className="flex-1 px-4 pb-28 pt-4">
         <Outlet />
       </main>

@@ -41,6 +41,16 @@ export interface ToteMemberRow {
   created_at?: number
 }
 
+/** An invitation by email, matched to the invitee's account email by ACLs. */
+export interface ToteInviteRow {
+  id: string
+  tote_id: string
+  /** Lowercased. */
+  email: string
+  created_by?: string | null
+  created_at?: number
+}
+
 /** Catalog entity: owned by its creator, attached to totes via tote_markets. */
 export interface MarketRow {
   id: string
@@ -115,6 +125,7 @@ function openCollection<T extends { id: string }>(name: string): Collection<T, s
 
 export const totesCollection = openCollection<ToteRow>('totes')
 export const toteMembersCollection = openCollection<ToteMemberRow>('tote_members')
+export const toteInvitesCollection = openCollection<ToteInviteRow>('tote_invites')
 export const marketsCollection = openCollection<MarketRow>('markets')
 export const departmentsCollection = openCollection<DepartmentRow>('departments')
 export const toteMarketsCollection = openCollection<ToteMarketRow>('tote_markets')
