@@ -22,6 +22,7 @@ import {
   toteMembersCollection,
   totesCollection,
 } from './collections'
+import { setDropHandler } from './subscribe'
 
 const ALL_COLLECTIONS = [
   totesCollection,
@@ -75,6 +76,38 @@ export async function resyncAll(): Promise<void> {
  */
 const HIDDEN_THRESHOLD_MS = 10_000
 
+/**
+ * A dropped subscription stream (ended, errored, lost events per the server's
+ * seq counter) schedules a resync. Debounced — seven collections usually drop
+ * together — and backing off exponentially so a flapping connection resyncs
+ * calmly instead of stampeding.
+ */
+let dropTimer: ReturnType<typeof setTimeout> | undefined
+let dropStrikes = 0
+let dropWhileHidden = false
+
+setDropHandler(() => {
+  if (typeof window === 'undefined' || resyncing) return
+  if (document.visibilityState === 'hidden') {
+    // Pointless to reconnect a page nobody is looking at; the resume
+    // handler below resyncs the moment it's visible again.
+    dropWhileHidden = true
+    return
+  }
+  if (dropTimer) return
+  const delay = Math.min(2000 * 2 ** dropStrikes, 60_000)
+  dropStrikes = Math.min(dropStrikes + 1, 5)
+  dropTimer = setTimeout(() => {
+    dropTimer = undefined
+    void resyncAll().then(() => {
+      // A stretch of calm forgives the strikes.
+      setTimeout(() => {
+        dropStrikes = Math.max(0, dropStrikes - 1)
+      }, 60_000)
+    })
+  }, delay)
+})
+
 let installed = false
 
 export function installResyncOnResume(): void {
@@ -87,7 +120,8 @@ export function installResyncOnResume(): void {
       hiddenAt = Date.now()
       return
     }
-    if (hiddenAt && Date.now() - hiddenAt >= HIDDEN_THRESHOLD_MS) {
+    if (dropWhileHidden || (hiddenAt && Date.now() - hiddenAt >= HIDDEN_THRESHOLD_MS)) {
+      dropWhileHidden = false
       void resyncAll()
     }
   })

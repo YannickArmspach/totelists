@@ -14,6 +14,7 @@ import { createCollection, type Collection } from '@tanstack/react-db'
 import { trailBaseCollectionOptions } from '@tanstack/trailbase-db-collection'
 
 import { client } from '#/lib/auth'
+import { robustSubscribe } from './subscribe'
 import type { Unit } from '#/lib/classify/units'
 
 export type Visibility = 'private' | 'public'
@@ -107,10 +108,23 @@ export interface ItemRow {
 }
 
 function openCollection<T extends { id: string }>(name: string): Collection<T, string> {
+  const api = client.records<T>(name)
+  /*
+    The client's own subscribe() corrupts events that cross a chunk boundary
+    and never reconnects — see db/subscribe.ts. Everything else delegates.
+  */
+  const recordApi = {
+    list: api.list.bind(api),
+    createBulk: api.createBulk.bind(api),
+    update: api.update.bind(api),
+    delete: api.delete.bind(api),
+    subscribe: () => robustSubscribe(name),
+  } as unknown as typeof api
+
   return createCollection(
     trailBaseCollectionOptions<T>({
       id: name,
-      recordApi: client.records<T>(name),
+      recordApi,
       getKey: (row) => row.id,
       /*
         No conversions: the row type IS the record type. For a concrete row
