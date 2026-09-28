@@ -12,6 +12,7 @@ import { History, Inbox, LayoutGrid, LogOut, ShoppingBag, Store } from 'lucide-r
 
 import { hasStoredSession, logout } from '#/lib/auth'
 import { useHydrated, useMyTotes, useToteItems } from '#/db/hooks'
+import { installResyncOnResume } from '#/db/resync'
 import { InviteBanner } from '#/components/invite-banner'
 import { useActiveTote } from '#/stores/active-tote'
 import { getLocale, locales, setLocale } from '#/paraglide/runtime'
@@ -30,6 +31,12 @@ function AuthedLayout() {
       void navigate({ to: '/login', replace: true })
     }
   }, [hydrated, navigate])
+
+  // Realtime streams don't survive Safari backgrounding or network changes,
+  // and the adapter never reconnects on its own — resync when we come back.
+  useEffect(() => {
+    if (hydrated && hasStoredSession()) installResyncOnResume()
+  }, [hydrated])
 
   if (hydrated && !hasStoredSession()) return null
 
