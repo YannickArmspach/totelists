@@ -4,19 +4,17 @@
  * Dragging between groups re-routes; tapping the circle bags the item.
  */
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
-import { RotateCcw } from 'lucide-react'
 
 import { itemsCollection } from '#/db/collections'
 import { useAttachedMarkets, useToteItems } from '#/db/hooks'
-import { groupByDepartment, sortAtEnd, topBoughtTitles, undoCheckOff } from '#/lib/items'
+import { groupByDepartment, sortAtEnd, topBoughtTitles } from '#/lib/items'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
+import { BoughtToday } from '#/components/bought-today'
 import { BuyRow } from '#/components/buy-row'
 import { GroupedSortable, type MoveResult } from '#/components/grouped-sortable'
 import { Badge } from '#/components/ui/badge'
-import { Button } from '#/components/ui/button'
 import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authed/markets_/$marketId')({ component: MarketPage })
@@ -26,7 +24,6 @@ function MarketPage() {
   const { activeToteId } = useActiveTote()
   const attached = useAttachedMarkets(activeToteId)
   const items = useToteItems(activeToteId)
-  const [showBought, setShowBought] = useState(false)
 
   const entry = attached.find(({ market }) => market.id === marketId)
   if (!entry) return <p className="pt-8 text-center text-sm text-muted-foreground">{m.not_found()}</p>
@@ -34,11 +31,6 @@ function MarketPage() {
   const marketItems = items.filter((item) => item.market_id === marketId)
   const buyItems = marketItems.filter((item) => item.status === 'buy')
   const groups = groupByDepartment(buyItems, entry.departments)
-
-  const startOfToday = new Date().setHours(0, 0, 0, 0) / 1000
-  const boughtToday = marketItems
-    .filter((item) => item.status === 'bought' && (item.bought_at ?? 0) >= startOfToday)
-    .sort((a, b) => (b.bought_at ?? 0) - (a.bought_at ?? 0))
 
   const suggestions = topBoughtTitles(items, activeToteId!, marketId)
 
@@ -76,7 +68,15 @@ function MarketPage() {
             items: group.items,
           }))}
           onMove={onMove}
-          renderItem={(item) => <BuyRow item={item} />}
+          renderItem={(item) => (
+            <BuyRow
+              item={item}
+              bucket={
+                groups.find((group) => (group.department?.id ?? null) === (item.department_id ?? null))
+                  ?.items ?? buyItems
+              }
+            />
+          )}
         />
       )}
 
@@ -115,40 +115,7 @@ function MarketPage() {
         </section>
       )}
 
-      {boughtToday.length > 0 && (
-        <section>
-          <button
-            type="button"
-            onClick={() => setShowBought((value) => !value)}
-            className="mb-2 text-sm font-medium text-muted-foreground underline-offset-2 hover:underline"
-          >
-            {m.bought_today()} ({boughtToday.length}) {showBought ? '▾' : '▸'}
-          </button>
-          {showBought && (
-            <ul className="flex flex-col gap-1.5">
-              {boughtToday.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex min-h-11 items-center gap-2 rounded-lg border bg-secondary/50 px-3 text-muted-foreground"
-                >
-                  <span className="min-w-0 flex-1 truncate line-through">{item.title}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={m.undo()}
-                    onClick={() => {
-                      const patch = undoCheckOff()
-                      itemsCollection.update(item.id, (draft) => Object.assign(draft, patch))
-                    }}
-                  >
-                    <RotateCcw />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+      <BoughtToday toteId={activeToteId!} items={marketItems} />
     </div>
   )
 }

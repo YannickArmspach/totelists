@@ -5,7 +5,7 @@
 import { useState } from 'react'
 
 import { itemsCollection, type ItemRow } from '#/db/collections'
-import { useAttachedMarkets } from '#/db/hooks'
+import { useAttachedMarkets, useMemberInitial, useToteMembers } from '#/db/hooks'
 import { UNITS, type Unit } from '#/lib/classify/units'
 import { Button } from '#/components/ui/button'
 import { Dialog } from '#/components/ui/dialog'
@@ -14,6 +14,8 @@ import { m } from '#/paraglide/messages'
 
 export function ItemEditDialog({ item, onClose }: { item: ItemRow; onClose: () => void }) {
   const attached = useAttachedMarkets(item.tote_id)
+  const members = useToteMembers(item.tote_id)
+  const initialOf = useMemberInitial(item.tote_id)
   const [marketId, setMarketId] = useState(item.market_id ?? '')
   const departments = attached.find((entry) => entry.market.id === marketId)?.departments ?? []
 
@@ -28,7 +30,9 @@ export function ItemEditDialog({ item, onClose }: { item: ItemRow; onClose: () =
           const unit = String(form.get('unit') ?? '')
           const price = String(form.get('price') ?? '').replace(',', '.')
           const departmentId = String(form.get('department') ?? '')
+          const assignee = String(form.get('assignee') ?? '')
           itemsCollection.update(item.id, (draft) => {
+            draft.assigned_to = assignee || null
             draft.title = String(form.get('title') ?? item.title).trim() || item.title
             draft.number = Number.isFinite(number) && number > 0 ? number : null
             draft.unit = (UNITS as readonly string[]).includes(unit) ? (unit as Unit) : null
@@ -98,6 +102,20 @@ export function ItemEditDialog({ item, onClose }: { item: ItemRow; onClose: () =
             </Select>
           </label>
         </div>
+        {members.length > 1 && (
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            {m.assignee_label()}
+            <Select name="assignee" defaultValue={item.assigned_to ?? ''}>
+              <option value="">{m.assignee_nobody()}</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.user_id}>
+                  {initialOf(member.user_id)}
+                  {member.role === 'owner' ? ` (${m.owner_badge()})` : ''}
+                </option>
+              ))}
+            </Select>
+          </label>
+        )}
         <div className="flex justify-between gap-2 pt-1">
           <Button
             variant="destructive"

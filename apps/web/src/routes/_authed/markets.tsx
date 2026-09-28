@@ -2,7 +2,7 @@
  * The active tote's markets: attach from the catalog, create new ones, edit
  * (with the update-everywhere / copy-for-this-tote flow), reorder, detach.
  */
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Pencil, Unlink } from 'lucide-react'
 
@@ -12,7 +12,8 @@ import { detachMarket } from '#/lib/catalog'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
-import { DepartmentsEditor, MarketEditDialog } from '#/components/market-editor'
+import { CatalogTabs } from '#/components/catalog-tabs'
+import { MarketEditDialog } from '#/components/market-editor'
 import { Button } from '#/components/ui/button'
 import { Input, Select, Textarea } from '#/components/ui/input'
 import { m } from '#/paraglide/messages'
@@ -25,7 +26,6 @@ function MarketsPage() {
   const catalog = useCatalogMarkets()
   const items = useToteItems(activeToteId)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   if (!activeToteId) return null
 
@@ -47,26 +47,20 @@ function MarketsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{m.markets_title()}</h1>
+      <CatalogTabs />
 
       <ul className="flex flex-col gap-3">
         {attached.map((entry, index) => (
           <li key={entry.attachment.id} className="rounded-xl border bg-card p-3">
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  setExpandedId(expandedId === entry.market.id ? null : entry.market.id)
-                }
-                className="min-w-0 flex-1 text-left"
-              >
+              <div className="min-w-0 flex-1">
                 <span className="font-medium">{entry.market.name}</span>
                 {entry.market.classification_hint && (
                   <span className="ml-2 text-sm text-muted-foreground">
                     {entry.market.classification_hint}
                   </span>
                 )}
-              </button>
+              </div>
               <Button variant="ghost" size="icon" aria-label="up" disabled={index === 0} onClick={() => reorder(index, -1)}>
                 <ChevronUp />
               </Button>
@@ -91,17 +85,16 @@ function MarketsPage() {
                 <Unlink />
               </Button>
             </div>
-            {expandedId === entry.market.id && (
-              <div className="mt-3 border-t pt-3">
-                <DepartmentsEditor toteId={activeToteId} entry={entry} />
-              </div>
-            )}
             {editingId === entry.market.id && (
               <MarketEditDialog toteId={activeToteId} entry={entry} onClose={() => setEditingId(null)} />
             )}
           </li>
         ))}
       </ul>
+
+      <Link to="/departments" className="text-sm text-muted-foreground underline underline-offset-2">
+        {m.manage_departments()} →
+      </Link>
 
       {attachable.length > 0 && (
         <form

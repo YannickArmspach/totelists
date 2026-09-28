@@ -86,6 +86,10 @@ export interface ItemRow {
   status: Status
   bought_at?: number | null
   bought_by?: string | null
+  /** Pinned to the top of its bucket (the star also rewrote `sort`). */
+  starred?: number
+  /** Which member of the tote is expected to handle this item. */
+  assigned_to?: string | null
   /** Fractional drag-and-drop rank within the item's display bucket. */
   sort: number
   created_at?: number

@@ -139,3 +139,19 @@ export function sortAtEnd(items: ItemRow[]): number {
   for (const item of items) if (item.sort > max) max = item.sort
   return max + 1
 }
+
+/**
+ * The rank a starred item takes: strictly above everything in its bucket.
+ * Fresh items rank at their creation epoch, so 0 clears them; an already
+ * negative minimum (stars stacked on stars) keeps descending.
+ */
+export function sortAtTop(items: ItemRow[]): number {
+  let min = 0
+  for (const item of items) if (item.sort < min) min = item.sort
+  return min - 1
+}
+
+/** Bought items, the freshest catch first. */
+export function byBoughtDesc(a: ItemRow, b: ItemRow): number {
+  return (b.bought_at ?? 0) - (a.bought_at ?? 0)
+}

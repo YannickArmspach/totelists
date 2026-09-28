@@ -123,6 +123,21 @@ export function useMyMembership(toteId: string | null | undefined): ToteMemberRo
   return members.find((row) => row.user_id === user?.id)
 }
 
+/**
+ * A stable initial per member (A, B, C… by join order). The record API never
+ * exposes other members' emails, so a letter is the whole name we have.
+ */
+export function useMemberInitial(toteId: string | null | undefined): (userId: string) => string {
+  const members = useToteMembers(toteId)
+  return useMemo(() => {
+    const index = new Map(members.map((member, i) => [member.user_id, i]))
+    return (userId: string) => {
+      const i = index.get(userId)
+      return i === undefined ? '?' : String.fromCharCode(65 + (i % 26))
+    }
+  }, [members])
+}
+
 export interface AttachedMarket {
   attachment: ToteMarketRow
   market: MarketRow

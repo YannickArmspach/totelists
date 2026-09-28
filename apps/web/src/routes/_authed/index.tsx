@@ -22,6 +22,7 @@ import { currentUserId } from '#/lib/auth'
 import { newId, newInviteCode } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
 import { SayIt } from '#/components/say-it'
+import { BoughtToday } from '#/components/bought-today'
 import { BuyRow } from '#/components/buy-row'
 import { GroupedSortable } from '#/components/grouped-sortable'
 import { Button } from '#/components/ui/button'
@@ -120,13 +121,17 @@ function HomePage() {
                 })
               }
             }}
-            renderItem={(item) => <BuyRow item={item} />}
+            renderItem={(item) => <BuyRow item={item} bucket={rootItems} />}
           />
         </section>
       )}
 
       {markets.length === 0 && rootItems.length === 0 && (
         <p className="text-center text-sm text-muted-foreground">{m.list_empty()}</p>
+      )}
+
+      {markets.length === 0 && (
+        <BoughtToday toteId={active.id} items={items.filter((item) => !item.market_id)} />
       )}
     </div>
   )

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { DepartmentRow, ItemRow } from '#/db/collections'
 import {
+  byBoughtDesc,
   checkOff,
   groupByDepartment,
   promote,
   rebalanceBucket,
   sortAtEnd,
+  sortAtTop,
   sortBetween,
   topBoughtTitles,
   undoCheckOff,
@@ -120,5 +122,22 @@ describe('drag ranking', () => {
 
   it('appends after the current max', () => {
     expect(sortAtEnd([item({ sort: 7 }), item({ sort: 2 })])).toBe(8)
+  })
+
+  it('stars above everything, even other stars', () => {
+    expect(sortAtTop([item({ sort: 1700000000 }), item({ sort: 5 })])).toBe(-1)
+    expect(sortAtTop([item({ sort: -3 }), item({ sort: 5 })])).toBe(-4)
+    expect(sortAtTop([])).toBe(-1)
+  })
+})
+
+describe('byBoughtDesc', () => {
+  it('orders checked items latest first', () => {
+    const list = [
+      item({ id: 'old', status: 'bought', bought_at: 100 }),
+      item({ id: 'new', status: 'bought', bought_at: 300 }),
+      item({ id: 'mid', status: 'bought', bought_at: 200 }),
+    ]
+    expect([...list].sort(byBoughtDesc).map((entry) => entry.id)).toEqual(['new', 'mid', 'old'])
   })
 })
