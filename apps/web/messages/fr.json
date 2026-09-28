@@ -123,6 +123,10 @@
   "sync_syncing": "Synchronisation…",
   "sync_offline": "Hors ligne — vos changements partiront au retour du réseau",
   "sync_error": "Échec de synchronisation — touchez pour réessayer",
+  "connection_lost_title": "Connexion perdue",
+  "connection_lost_body": "Vous êtes hors ligne. Continuez à cocher — tout se synchronisera au retour du réseau.",
+  "reconnect": "Reconnecter",
+  "continue_offline": "Continuer hors ligne",
   "first_tote_title": "Créez votre premier tote",
   "first_tote_hint": "Un tote est une liste de courses partageable. Donnez-lui un nom — magasins et rayons viendront après.",
   "not_found": "Rien ici."

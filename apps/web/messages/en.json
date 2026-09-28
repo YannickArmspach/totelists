@@ -123,6 +123,10 @@
   "sync_syncing": "Syncing…",
   "sync_offline": "Offline — changes will sync when you're back",
   "sync_error": "Sync failed — tap to retry",
+  "connection_lost_title": "Connection lost",
+  "connection_lost_body": "You're offline. You can keep checking things off — everything syncs once you're back.",
+  "reconnect": "Reconnect",
+  "continue_offline": "Continue offline",
   "first_tote_title": "Create your first tote",
   "first_tote_hint": "A tote is a shopping list you can share. Give it a name — markets and departments can come later.",
   "not_found": "Nothing here."

@@ -15,6 +15,7 @@ import { useHydrated, useMyTotes, useToteItems } from '#/db/hooks'
 import { installResyncOnResume } from '#/db/resync'
 import { InviteBanner } from '#/components/invite-banner'
 import { SyncIndicator } from '#/components/sync-indicator'
+import { ConnectionLostModal } from '#/components/connection-lost'
 import { useActiveTote } from '#/stores/active-tote'
 import { getLocale, locales, setLocale } from '#/paraglide/runtime'
 import { m } from '#/paraglide/messages'
@@ -49,6 +50,7 @@ function AuthedLayout() {
         <Outlet />
       </main>
       <TabBar />
+      <ConnectionLostModal />
     </div>
   )
 }
