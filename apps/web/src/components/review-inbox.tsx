@@ -1,15 +1,15 @@
 /**
- * The review inbox: everything the classifier (or quick-add) just bagged, as
- * `new` items. Fix the routing if the AI guessed wrong, then promote.
+ * The review section: everything the classifier (or quick-add) just bagged, as
+ * `new` items. It sits right under AddIt on the home page, between what you
+ * just said and the lists it will land in — fix the routing if the AI guessed
+ * wrong, then promote. Nothing to review means nothing to render.
  */
-import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { ArrowRight, Trash2 } from 'lucide-react'
 
 import { itemsCollection, type ItemRow } from '#/db/collections'
-import { useAttachedMarkets, useToteItems } from '#/db/hooks'
+import { useAttachedMarkets } from '#/db/hooks'
 import { promote } from '#/lib/items'
-import { useActiveTote } from '#/stores/active-tote'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Select } from '#/components/ui/input'
@@ -17,14 +17,12 @@ import { Qty } from '#/components/qty'
 import { ItemEditDialog } from '#/components/item-edit-dialog'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/inbox')({ component: InboxPage })
-
-function InboxPage() {
-  const { activeToteId } = useActiveTote()
-  const items = useToteItems(activeToteId)
+export function ReviewInbox({ items }: { items: ItemRow[] }) {
   const newItems = items
     .filter((item) => item.status === 'new')
     .sort((a, b) => b.id.localeCompare(a.id)) // newest first
+
+  if (newItems.length === 0) return null
 
   const promoteAll = () => {
     const patch = promote()
@@ -34,9 +32,9 @@ function InboxPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{m.inbox_title()}</h1>
+        <h2 className="text-sm font-medium text-muted-foreground">{m.inbox_title()}</h2>
         {newItems.length > 1 && (
           <Button variant="secondary" size="sm" onClick={promoteAll}>
             {m.promote_all()}
@@ -44,16 +42,12 @@ function InboxPage() {
         )}
       </div>
 
-      {newItems.length === 0 ? (
-        <p className="pt-8 text-center text-sm text-muted-foreground">{m.inbox_empty()}</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {newItems.map((item) => (
-            <InboxCard key={item.id} item={item} />
-          ))}
-        </ul>
-      )}
-    </div>
+      <ul className="flex flex-col gap-2">
+        {newItems.map((item) => (
+          <InboxCard key={item.id} item={item} />
+        ))}
+      </ul>
+    </section>
   )
 }
 

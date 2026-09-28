@@ -61,7 +61,7 @@ function TotesPage() {
           const name = String(form.get('name') ?? '').trim()
           if (!name) return
           const visibility = form.get('visibility') === 'public' ? 'public' : 'private'
-          open(createTote(name, visibility))
+          void createTote(name, visibility).then(open)
         }}
       >
         <h2 className="text-sm font-medium text-muted-foreground">{m.new_tote()}</h2>

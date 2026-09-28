@@ -8,10 +8,10 @@
  */
 import { Link, Outlet, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { History, Inbox, LayoutGrid, LogOut, ShoppingBag, Store } from 'lucide-react'
+import { History, LayoutGrid, LogOut, ShoppingBag, Store } from 'lucide-react'
 
 import { hasStoredSession, logout } from '#/lib/auth'
-import { useHydrated, useMyTotes, useToteItems } from '#/db/hooks'
+import { useHydrated, useMyTotes } from '#/db/hooks'
 import { installResyncOnResume } from '#/db/resync'
 import { InviteBanner } from '#/components/invite-banner'
 import { SyncIndicator } from '#/components/sync-indicator'
@@ -19,8 +19,6 @@ import { ConnectionLostModal } from '#/components/connection-lost'
 import { useActiveTote } from '#/stores/active-tote'
 import { getLocale, locales, setLocale } from '#/paraglide/runtime'
 import { m } from '#/paraglide/messages'
-import { cn } from '#/lib/utils'
-import { Badge } from '#/components/ui/badge'
 
 export const Route = createFileRoute('/_authed')({ component: AuthedLayout })
 
@@ -122,10 +120,6 @@ function LocaleToggle() {
 }
 
 function TabBar() {
-  const { activeToteId } = useActiveTote()
-  const items = useToteItems(activeToteId)
-  const newCount = items.filter((item) => item.status === 'new').length
-
   const tab =
     'flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground [&.active]:text-primary'
 
@@ -138,13 +132,6 @@ function TabBar() {
         <Link to="/" className={tab} activeOptions={{ exact: true }}>
           <ShoppingBag className="size-5" />
           {m.app_name()}
-        </Link>
-        <Link to="/inbox" className={cn(tab, 'relative')}>
-          <Inbox className="size-5" />
-          {m.inbox_title()}
-          {newCount > 0 && (
-            <Badge className="absolute right-[calc(50%-1.75rem)] top-1">{newCount}</Badge>
-          )}
         </Link>
         <Link to="/markets" className={tab}>
           <Store className="size-5" />

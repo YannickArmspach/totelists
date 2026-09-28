@@ -32,9 +32,33 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 })
 
+/*
+  The worker is production-only. Its asset handler is cache-first against a
+  fixed cache name, which in dev pins Vite's module URLs forever: the browser
+  keeps running last week's JS against a freshly SSR-ed tree (hydration
+  mismatch) with a stale HMR token (dead websocket). So dev ships the opposite
+  script and tears down whatever a previous run installed.
+*/
 const SW_REGISTER = `
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
+}
+`
+
+const SW_UNREGISTER = `
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+    .then(() => window.caches && caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))))
+    .then(() => {
+      // Only the reload swaps the already-running stale modules for fresh ones.
+      // sessionStorage caps it at one attempt per tab, so a worker that somehow
+      // survives unregistration can't turn this into a reload loop.
+      if (navigator.serviceWorker.controller && !sessionStorage.getItem('tote-sw-purged')) {
+        sessionStorage.setItem('tote-sw-purged', '1')
+        location.reload()
+      }
+    })
 }
 `
 
@@ -46,7 +70,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="font-sans antialiased">
         {children}
-        <script dangerouslySetInnerHTML={{ __html: SW_REGISTER }} />
+        <script dangerouslySetInnerHTML={{ __html: import.meta.env.PROD ? SW_REGISTER : SW_UNREGISTER }} />
         <Scripts />
       </body>
     </html>

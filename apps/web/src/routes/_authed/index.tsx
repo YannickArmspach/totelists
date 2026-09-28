@@ -21,7 +21,8 @@ import {
 import { currentUserId } from '#/lib/auth'
 import { newId, newInviteCode } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
-import { SayIt } from '#/components/say-it'
+import { AddIt } from '#/components/add-it'
+import { ReviewInbox } from '#/components/review-inbox'
 import { BoughtToday } from '#/components/bought-today'
 import { BuyRow } from '#/components/buy-row'
 import { GroupedSortable } from '#/components/grouped-sortable'
@@ -31,8 +32,20 @@ import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authed/')({ component: HomePage })
 
-/** Create a tote + the creator's own owner row; returns the new tote. */
-export function createTote(name: string, visibility: ToteRow['visibility']): ToteRow {
+/**
+ * Create a tote + the creator's own owner row; returns the new tote.
+ *
+ * The two inserts must not race. tote_members' CREATE rule proves the creator
+ * is allowed in with `EXISTS(SELECT 1 FROM totes WHERE id = _REQ_.tote_id AND
+ * created_by = _USER_.id)`, and separate collections flush as independent
+ * transactions — so if the membership POST lands first TrailBase 403s it and
+ * the tote is left ownerless, which then 403s every item written into it.
+ * Await the tote before claiming it.
+ */
+export async function createTote(
+  name: string,
+  visibility: ToteRow['visibility'],
+): Promise<ToteRow> {
   const userId = currentUserId()
   const tote: ToteRow = {
     id: newId(),
@@ -41,7 +54,7 @@ export function createTote(name: string, visibility: ToteRow['visibility']): Tot
     visibility,
     invite_code: newInviteCode(),
   }
-  totesCollection.insert(tote)
+  await totesCollection.insert(tote).isPersisted.promise
   toteMembersCollection.insert({
     id: newId(),
     tote_id: tote.id,
@@ -83,7 +96,9 @@ function HomePage() {
         <p className="text-sm text-muted-foreground">{m.baseline()}</p>
       </div>
 
-      <SayIt toteId={active.id} markets={classifyMarkets} />
+      <AddIt toteId={active.id} markets={classifyMarkets} />
+
+      <ReviewInbox items={items} />
 
       {markets.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -148,7 +163,7 @@ function FirstTote({ onCreated }: { onCreated: (tote: ToteRow) => void }) {
           event.preventDefault()
           const name = String(new FormData(event.currentTarget).get('name') ?? '').trim()
           if (!name) return
-          onCreated(createTote(name, 'private'))
+          void createTote(name, 'private').then(onCreated)
         }}
       >
         <Input name="name" placeholder={m.tote_name_label()} required />
