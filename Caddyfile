@@ -1,0 +1,30 @@
+# Local dev over HTTPS, for HTTP/2 — not for looks.
+#
+# The app holds one permanent SSE stream per collection (seven of them) against
+# the TrailBase origin. Over HTTP/1.1 a browser allows six connections per
+# origin, so the seventh never connects — whichever collection loses the race
+# stops syncing, and writes queue behind a saturated pool. HTTP/2 multiplexes
+# every stream over a single connection and the ceiling disappears.
+#
+# Browsers only negotiate HTTP/2 over TLS (via ALPN, on any port), hence this.
+# Caddy terminates TLS on the ports the app already uses and forwards plain
+# HTTP/1.1 to Vite and TrailBase, which move up by 100. Nothing but the scheme
+# changes for the developer: https://localhost:3000 and https://localhost:4000.
+#
+# `local_certs` issues from Caddy's own CA; `caddy trust` teaches the system to
+# accept it. See README, "Development".
+
+{
+	local_certs
+	# Both sites are explicitly https on explicit ports, so the redirect server
+	# has nothing to redirect — and binding :80 would need root on macOS.
+	auto_https disable_redirects
+}
+
+https://localhost:3000 {
+	reverse_proxy localhost:3100
+}
+
+https://localhost:4000 {
+	reverse_proxy localhost:4100
+}

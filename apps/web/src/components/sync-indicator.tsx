@@ -24,7 +24,7 @@ export function SyncIndicator() {
   return (
     <button
       type="button"
-      onClick={() => void resyncAll()}
+      onClick={() => resyncAll()}
       disabled={status === 'syncing'}
       aria-label={label}
       title={label}

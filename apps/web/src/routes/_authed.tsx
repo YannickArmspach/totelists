@@ -57,7 +57,11 @@ function Header() {
   const totes = useMyTotes()
   const { activeToteId, setActiveTote } = useActiveTote()
 
-  // The stored id may point at a tote we've since left; fall back to the first.
+  /*
+    The header no longer renders the totes — the card strip on home does — but
+    this repair must live somewhere always-mounted: the stored id may point at
+    a tote we've since left, and every per-tote page reads it.
+  */
   const active = totes.find((tote) => tote.id === activeToteId) ?? totes[0]
   useEffect(() => {
     if (active && active.id !== activeToteId) setActiveTote(active.id)
@@ -71,23 +75,6 @@ function Header() {
         <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
           <ShoppingBag className="size-4" />
         </span>
-      </Link>
-      {totes.length > 0 && (
-        <select
-          value={active?.id ?? ''}
-          onChange={(event) => setActiveTote(event.target.value)}
-          className="min-h-10 max-w-44 flex-1 truncate rounded-lg border bg-card px-2 text-sm font-medium"
-          aria-label={m.my_totes()}
-        >
-          {totes.map((tote) => (
-            <option key={tote.id} value={tote.id}>
-              {tote.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <Link to="/totes" className="text-sm text-muted-foreground underline-offset-2 hover:underline">
-        {m.my_totes()}
       </Link>
       <span className="flex-1" />
       <SyncIndicator />

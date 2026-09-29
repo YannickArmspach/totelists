@@ -25,6 +25,8 @@ export interface ToteRow {
   id: string
   created_by?: string | null
   name: string
+  /** What this tote is for; shown on its card on the home strip. */
+  description?: string
   visibility: Visibility
   /** Join secret for private totes; null = link joining disabled. */
   invite_code?: string | null
@@ -112,16 +114,22 @@ function openCollection<T extends { id: string }>(name: string): Collection<T, s
   /*
     The client's own subscribe() corrupts events that cross a chunk boundary
     and never reconnects — see db/subscribe.ts. Everything else delegates.
+
+    A reconnecting stream closes its gap by diffing a fresh list against what
+    the collection currently holds, so it needs to read that back. The
+    collection does not exist yet when we build this, hence the late binding —
+    sync starts well after createCollection() has returned.
   */
+  let collection: Collection<T, string> | undefined
   const recordApi = {
     list: api.list.bind(api),
     createBulk: api.createBulk.bind(api),
     update: api.update.bind(api),
     delete: api.delete.bind(api),
-    subscribe: () => robustSubscribe(name),
+    subscribe: () => robustSubscribe<T>(name, () => collection?.toArray ?? []),
   } as unknown as typeof api
 
-  return createCollection(
+  collection = createCollection(
     trailBaseCollectionOptions<T>({
       id: name,
       recordApi,
@@ -135,6 +143,7 @@ function openCollection<T extends { id: string }>(name: string): Collection<T, s
       serialize: {} as never,
     }),
   ) as Collection<T, string>
+  return collection
 }
 
 export const totesCollection = openCollection<ToteRow>('totes')

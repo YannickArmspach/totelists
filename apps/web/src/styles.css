@@ -96,3 +96,11 @@
     padding-right: env(safe-area-inset-right);
   }
 }
+
+/* Scroll without the bar — the tote card strip scrolls sideways under a thumb. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

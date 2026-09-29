@@ -16,8 +16,17 @@ const tbDir = join(root, 'services', 'trailbase')
 const credentialsFile = join(tbDir, '.admin-credentials.json')
 const authComponent = join(tbDir, 'traildepot', 'wasm', 'trailbase_auth_ui_component.wasm')
 
-const WEB_URL = 'http://localhost:3000'
-const TB_URL = 'http://localhost:4000'
+/*
+  Dev is served over TLS so the browser negotiates HTTP/2 — see Caddyfile. The
+  app's seven SSE streams do not fit in HTTP/1.1's six-connections-per-origin
+  budget, so one collection silently never syncs.
+
+  Caddy owns the public ports; Vite and TrailBase sit 100 above, reachable only
+  through it.
+*/
+const WEB_URL = 'https://localhost:3000'
+const TB_URL = 'https://localhost:4000'
+const TB_ADDRESS = 'localhost:4100' // Vite's own port lives in apps/web/package.json.
 
 const c = {
   reset: '\x1b[0m',
@@ -25,6 +34,7 @@ const c = {
   dim: '\x1b[2m',
   web: '\x1b[36m',
   tb: '\x1b[35m',
+  tls: '\x1b[34m',
   key: '\x1b[32m',
   warn: '\x1b[33m',
 }
@@ -104,6 +114,12 @@ function run(label, colour, command, args, options) {
           `${c.dim}(it lands in ~/.local/bin, which must be on your PATH)${c.reset}\n`,
       )
     }
+    if (err.code === 'ENOENT' && command === 'caddy') {
+      process.stderr.write(
+        `${c.warn}Install Caddy with:${c.reset} brew install caddy\n` +
+          `${c.dim}then trust its local CA once:${c.reset} caddy trust\n`,
+      )
+    }
     shutdown(1)
   })
   child.on('close', (code) => {
@@ -130,10 +146,16 @@ process.on('SIGTERM', () => shutdown(0))
   for: it authenticates with bearer tokens and never reads a cookie. Strict is
   what production gets too, so dev behaves the same way.
 */
-const trailbase = run('tb', c.tb, 'trail', ['run', '--cors-allowed-origins', WEB_URL], {
-  cwd: tbDir,
-})
+const trailbase = run(
+  'tb',
+  c.tb,
+  'trail',
+  ['run', '--address', TB_ADDRESS, '--cors-allowed-origins', WEB_URL],
+  { cwd: tbDir },
+)
 run('web', c.web, 'pnpm', ['--filter', '@tote/web', 'dev'], { cwd: root })
+// Terminates TLS on 3000/4000 and forwards to the two above.
+run('tls', c.tls, 'caddy', ['run', '--config', join(root, 'Caddyfile')], { cwd: root })
 
 let credentials = readCredentials()
 let bannerShown = false

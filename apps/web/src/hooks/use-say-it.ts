@@ -14,6 +14,7 @@ import { useCallback, useState } from 'react'
 import { departmentsCollection, itemsCollection } from '#/db/collections'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
+import { getLocale } from '#/paraglide/runtime'
 import type { ClassifyMarket, ParsedItem } from '#/lib/classify/schema'
 
 export type SayItPhase =
@@ -108,6 +109,21 @@ export function useSayIt(toteId: string | null, markets: ClassifyMarket[]) {
       try {
         const form = new FormData()
         form.append('audio', blob)
+        /*
+          Pin the transcription to the interface language. Whisper otherwise
+          detects it from the audio, which is reliable on a full sentence but
+          thin on what this app actually records — a three-word list ("lait,
+          pain, œufs"), often in a noisy aisle. The locale is the stronger
+          prior: someone running the app in French is speaking French.
+
+          The trade-off is real, though: forced, a mismatched language makes
+          Whisper TRANSLATE rather than fall back to detection ("deux kilos de
+          tomates" under `en` comes back as "2 kg of tomato"). So this is only
+          right while the locale genuinely tracks the spoken language.
+
+          Paraglide's codes are ISO-639-1, which is what Whisper wants.
+        */
+        form.append('language', getLocale())
         const response = await fetch('/api/transcribe', { method: 'POST', body: form })
         if (!response.ok) throw new Error(`transcribe ${response.status}`)
         const { text } = (await response.json()) as { text: string }

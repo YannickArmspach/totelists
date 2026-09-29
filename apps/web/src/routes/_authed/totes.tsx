@@ -24,7 +24,10 @@ function TotesPage() {
 
   const open = (tote: ToteRow) => {
     setActiveTote(tote.id)
-    void navigate({ to: '/' })
+    void navigate({
+      to: '/user-{$userId}/tote-{$toteId}',
+      params: { userId: tote.created_by ?? 'unknown', toteId: tote.id },
+    })
   }
 
   return (

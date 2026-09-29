@@ -13,7 +13,7 @@ import { newId, newInviteCode } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Input, Select } from '#/components/ui/input'
+import { Input, Select, Textarea } from '#/components/ui/input'
 import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authed/totes_/$toteId/settings')({
@@ -52,6 +52,7 @@ function ToteSettingsPage() {
           if (!name || !isOwner) return
           totesCollection.update(tote.id, (draft) => {
             draft.name = name
+            draft.description = String(form.get('description') ?? '').trim()
             draft.visibility = form.get('visibility') === 'public' ? 'public' : 'private'
             draft.updated_at = Math.floor(Date.now() / 1000)
           })
@@ -60,6 +61,16 @@ function ToteSettingsPage() {
         <label className="flex flex-col gap-1 text-sm font-medium">
           {m.tote_name_label()}
           <Input name="name" defaultValue={tote.name} disabled={!isOwner} required />
+        </label>
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          {m.tote_description_label()}
+          <Textarea
+            name="description"
+            defaultValue={tote.description ?? ''}
+            placeholder={m.tote_description_placeholder()}
+            disabled={!isOwner}
+            rows={2}
+          />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           {m.visibility_label()}

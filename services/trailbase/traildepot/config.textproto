@@ -23,52 +23,34 @@ record_apis: [{
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
   create_access_rule: "_REQ_.created_by = _USER_.id"
-  # Readable by members, by anyone for public totes, and by invitees — an
-  # invitation banner that can't name the tote invites nobody.
-  read_access_rule: "_ROW_.visibility = 'public' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _ROW_.id AND i.email = u.email COLLATE NOCASE)"
-  update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = 'owner')"
-  delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = 'owner')"
+  read_access_rule: "_ROW_.visibility = \'public\' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _ROW_.id AND i.email = u.email COLLATE NOCASE)"
+  update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = \'owner\')"
+  delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = \'owner\')"
 }, {
   name: "tote_members"
   table_name: "tote_members"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # The join rule. You may only insert yourself, and only when one of:
-  #   1. the tote is public;
-  #   2. you presented the current invite_code (private tote, link join);
-  #   3. you created the tote (bootstrap of the owner row);
-  #   4. your account email holds an invitation to it.
-  # Role-escalation guard: 'owner' is insertable only by the tote creator.
-  create_access_rule: "_REQ_.user_id = _USER_.id AND (EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.visibility = 'public') OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.invite_code IS NOT NULL AND t.invite_code = _REQ_.joined_with_code) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _REQ_.tote_id AND i.email = u.email COLLATE NOCASE)) AND (_REQ_.role IS NULL OR _REQ_.role = 'member' OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id))"
-  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = 'public')"
-  # Only owners touch roles.
-  update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = 'owner')"
-  # Leave (self) or kick (owner).
-  delete_access_rule: "_ROW_.user_id = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = 'owner')"
+  create_access_rule: "_REQ_.user_id = _USER_.id AND (EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.visibility = \'public\') OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.invite_code IS NOT NULL AND t.invite_code = _REQ_.joined_with_code) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _REQ_.tote_id AND i.email = u.email COLLATE NOCASE)) AND (_REQ_.role IS NULL OR _REQ_.role = \'member\' OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _REQ_.tote_id AND t.created_by = _USER_.id))"
+  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = \'public\')"
+  update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = \'owner\')"
+  delete_access_rule: "_ROW_.user_id = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id AND m.role = \'owner\')"
 }, {
   name: "tote_invites"
   table_name: "tote_invites"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # Any member may invite; attribution is pinned.
   create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id)"
-  # Visible to the tote's members (to manage) and to the invitee (to accept).
   read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = _ROW_.email COLLATE NOCASE)"
-  # Nothing on an invite is worth editing; revoke and re-invite instead.
   update_access_rule: "FALSE"
-  # Revoke (member) or decline / consume-on-accept (invitee).
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = _ROW_.email COLLATE NOCASE)"
 }, {
   name: "markets"
   table_name: "markets"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # Catalog entry. You see a market if it's yours, or it's attached to a tote
-  # you're a member of, or attached to a public tote.
   create_access_rule: "_REQ_.created_by = _USER_.id"
-  read_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = _ROW_.id AND t.visibility = 'public')"
-  # In-place edits are creator-only ("update everywhere"). Everyone else goes
-  # through client-side copy-on-write.
+  read_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = _ROW_.id AND t.visibility = \'public\')"
   update_access_rule: "_ROW_.created_by = _USER_.id"
   delete_access_rule: "_ROW_.created_by = _USER_.id"
 }, {
@@ -76,13 +58,8 @@ record_apis: [{
   table_name: "departments"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # Anyone who can use the market may add departments to it: its creator, or a
-  # member of any tote that attached it. (This is also how the AI's proposed
-  # departments get created, on the speaking user's token.)
   create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _REQ_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m.user_id = _USER_.id)))"
-  # Readable wherever the parent market is readable.
-  read_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = w.id AND t.visibility = 'public')))"
-  # In-place edit: department creator or the market creator; others copy-on-write.
+  read_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = w.id AND t.visibility = \'public\')))"
   update_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND w.created_by = _USER_.id)"
   delete_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND w.created_by = _USER_.id)"
 }, {
@@ -90,11 +67,8 @@ record_apis: [{
   table_name: "tote_markets"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # Attaching: you must be a member of the tote AND able to read the market
-  # (yours, or reachable through one of your totes).
   create_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id) AND EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _REQ_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m2 ON m2.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m2.user_id = _USER_.id)))"
-  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = 'public')"
-  # Reorder / detach: any member of the tote.
+  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = \'public\')"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
 }, {
@@ -102,10 +76,8 @@ record_apis: [{
   table_name: "items"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  # Membership + attribution + integrity (market, when set, must be ATTACHED
-  # to this tote via tote_markets).
   create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id) AND (_REQ_.market_id IS NULL OR EXISTS(SELECT 1 FROM tote_markets AS tm WHERE tm.tote_id = _REQ_.tote_id AND tm.market_id = _REQ_.market_id))"
-  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = 'public')"
+  read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = \'public\')"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
 }]

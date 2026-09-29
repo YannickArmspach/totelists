@@ -8,6 +8,15 @@ const config = defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  /*
+    Vite listens on 3100 but the browser reaches it as https://localhost:3000,
+    through the Caddy proxy that gives dev HTTP/2 (see ../../Caddyfile). The
+    HMR client has to be told where to dial back, or it tries ws://localhost
+    :3100 from a TLS page and is blocked as mixed content.
+  */
+  server: {
+    hmr: { protocol: 'wss', host: 'localhost', clientPort: 3000 },
+  },
   plugins: [
     /*
       Cookie first: the locale must be known on the SERVER (src/server.ts wraps

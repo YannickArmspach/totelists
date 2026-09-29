@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dataLines, splitSseFrames } from './subscribe'
+import { dataLines, diffRows, splitSseFrames } from './subscribe'
 
 describe('splitSseFrames', () => {
   it('keeps a partial frame in the buffer instead of parsing it', () => {
@@ -30,5 +30,43 @@ describe('dataLines', () => {
 
   it('extracts the payload', () => {
     expect(dataLines('data: {"Insert":{"id":"x"}}')).toEqual(['{"Insert":{"id":"x"}}'])
+  })
+})
+
+describe('diffRows', () => {
+  it('emits nothing when the reconnect found no changes', () => {
+    const rows = [{ id: 'a', title: 'Milk' }, { id: 'b', title: 'Eggs' }]
+    // Fresh objects, same values — a re-list never returns identical references.
+    expect(diffRows(rows.map((row) => ({ ...row })), rows)).toEqual([])
+  })
+
+  it('inserts rows other members added while we were away', () => {
+    expect(diffRows([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }])).toEqual([{ Insert: { id: 'b' } }])
+  })
+
+  it('updates rows whose fields moved on', () => {
+    expect(diffRows([{ id: 'a', status: 'bought' }], [{ id: 'a', status: 'buy' }])).toEqual([
+      { Update: { id: 'a', status: 'bought' } },
+    ])
+  })
+
+  it('deletes rows the server no longer has', () => {
+    expect(diffRows([{ id: 'a' }], [{ id: 'a' }, { id: 'gone' }])).toEqual([
+      { Delete: { id: 'gone' } },
+    ])
+  })
+
+  it('notices a field that only one side has', () => {
+    // A key present-but-undefined must not read as equal to a missing key.
+    expect(diffRows([{ id: 'a', note: 'x' }], [{ id: 'a' }])).toEqual([
+      { Update: { id: 'a', note: 'x' } },
+    ])
+  })
+
+  it('handles the first sync after a total loss', () => {
+    expect(diffRows([{ id: 'a' }, { id: 'b' }], [])).toEqual([
+      { Insert: { id: 'a' } },
+      { Insert: { id: 'b' } },
+    ])
   })
 })

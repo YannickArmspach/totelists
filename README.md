@@ -21,14 +21,25 @@ space — private with an invite link, or public and joinable by anyone).
 
 ```sh
 pnpm install
+brew install caddy && caddy trust           # local HTTPS, once — see below
 cp apps/web/.env.example apps/web/.env   # set WHISPER_API_KEY / MERIDIAN_API_KEY, or FAKE_AI=1
 pnpm dev
 ```
 
 `dev.js` starts TrailBase (`trail` binary, install: `curl -sSL
-https://trailbase.io/install.sh | bash`) and the Vite dev server, and prints
-the admin credentials banner. App on http://localhost:3000, TrailBase admin on
-http://localhost:4000/_/admin/.
+https://trailbase.io/install.sh | bash`), the Vite dev server and Caddy, and
+prints the admin credentials banner. App on https://localhost:3000, TrailBase
+admin on https://localhost:4000/_/admin/.
+
+**Why dev is HTTPS.** The app holds one permanent SSE stream per collection —
+seven — against the TrailBase origin. HTTP/1.1 browsers allow six connections
+per origin, so the seventh never connects: one collection silently stops
+syncing and writes queue behind a saturated pool. HTTP/2 multiplexes them all
+over a single connection, and browsers only negotiate it over TLS. So Caddy
+terminates TLS on 3000/4000 and forwards to Vite (3100) and TrailBase (4100);
+see `Caddyfile`. `caddy trust` installs Caddy's local CA into the system
+keychain so the browser accepts the certificates — run it once, undo with
+`caddy untrust`.
 
 **First registration:** TrailBase requires email verification and dev has no
 SMTP. Verify the user from the admin UI (Users → verify), then log in.
