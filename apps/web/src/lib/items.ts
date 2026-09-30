@@ -44,8 +44,12 @@ const bySort = (a: { sort: number }, b: { sort: number }) => a.sort - b.sort
 
 /**
  * A market page's sections: departments that HAVE items here (emergent — a
- * tote never lists a department it isn't using), in department sort order,
- * the no-department bucket last. Items inside follow their own dnd rank.
+ * tote never lists a department it isn't using), in the order given, the
+ * no-department bucket last. Items inside follow their own dnd rank.
+ *
+ * `departments` arrives already in this market's order (the order lives on the
+ * market_departments attach row, since a shared preset can sit third in one
+ * store and first in another), so it is used as-is rather than re-sorted.
  */
 export function groupByDepartment(items: ItemRow[], departments: DepartmentRow[]): DepartmentGroup[] {
   const byId = new Map(departments.map((d) => [d.id, d]))
@@ -60,7 +64,7 @@ export function groupByDepartment(items: ItemRow[], departments: DepartmentRow[]
   }
 
   const groups: DepartmentGroup[] = []
-  for (const dept of [...departments].sort(bySort)) {
+  for (const dept of departments) {
     const bucket = buckets.get(dept.id)
     if (bucket) groups.push({ department: dept, items: bucket.sort(bySort) })
   }

@@ -8,11 +8,13 @@
  */
 import { Link, Outlet, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { History, LayoutGrid, LogOut, ShoppingBag, Store } from 'lucide-react'
+import { History, Home, LogOut, ShoppingBag, Store } from 'lucide-react'
 
 import { hasStoredSession, logout } from '#/lib/auth'
 import { useHydrated, useMyTotes } from '#/db/hooks'
 import { installResyncOnResume } from '#/db/resync'
+import { Breadcrumb } from '#/components/breadcrumb'
+import { EditAction } from '#/components/edit-action'
 import { InviteBanner } from '#/components/invite-banner'
 import { SyncIndicator } from '#/components/sync-indicator'
 import { ConnectionLostModal } from '#/components/connection-lost'
@@ -71,12 +73,14 @@ function Header() {
     <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/90 px-4 py-2 backdrop-blur"
       style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}
     >
-      <Link to="/" className="flex items-center gap-1.5 font-semibold">
+      <Link to="/" className="flex shrink-0 items-center gap-1.5 font-semibold">
         <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
           <ShoppingBag className="size-4" />
         </span>
       </Link>
+      <Breadcrumb />
       <span className="flex-1" />
+      <EditAction />
       <SyncIndicator />
       <LocaleToggle />
       <button
@@ -117,16 +121,16 @@ function TabBar() {
     >
       <div className="mx-auto flex w-full max-w-2xl">
         <Link to="/" className={tab} activeOptions={{ exact: true }}>
+          <Home className="size-5" />
+          {m.home_title()}
+        </Link>
+        <Link to="/totes" className={tab}>
           <ShoppingBag className="size-5" />
-          {m.app_name()}
+          {m.totes_title()}
         </Link>
         <Link to="/markets" className={tab}>
           <Store className="size-5" />
           {m.markets_title()}
-        </Link>
-        <Link to="/overview" className={tab}>
-          <LayoutGrid className="size-5" />
-          {m.overview_title()}
         </Link>
         <Link to="/history" className={tab}>
           <History className="size-5" />

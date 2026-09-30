@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { ArrowRight, Trash2 } from 'lucide-react'
 
 import { itemsCollection, type ItemRow } from '#/db/collections'
-import { useAttachedMarkets } from '#/db/hooks'
+import { useMarketsWithDepartments } from '#/db/hooks'
 import { promote } from '#/lib/items'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -52,7 +52,7 @@ export function ReviewInbox({ items }: { items: ItemRow[] }) {
 }
 
 function InboxCard({ item }: { item: ItemRow }) {
-  const attached = useAttachedMarkets(item.tote_id)
+  const attached = useMarketsWithDepartments()
   const [editing, setEditing] = useState(false)
   const departments = attached.find((entry) => entry.market.id === item.market_id)?.departments ?? []
   const department = departments.find((dept) => dept.id === item.department_id)

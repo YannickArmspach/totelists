@@ -23,7 +23,11 @@ record_apis: [{
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
   create_access_rule: "_REQ_.created_by = _USER_.id"
-  read_access_rule: "_ROW_.visibility = \'public\' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _ROW_.id AND i.email = u.email COLLATE NOCASE)"
+  # created_by comes first, and not only for short-circuit speed: a tote is
+  # unreadable by its own creator until a tote_members row exists, and that row
+  # is written after the insert resolves. Without this clause the creator never
+  # sees their own row come back on the subscription, and creation deadlocks.
+  read_access_rule: "_ROW_.created_by = _USER_.id OR _ROW_.visibility = \'public\' OR EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_invites AS i JOIN _user AS u ON u.id = _USER_.id WHERE i.tote_id = _ROW_.id AND i.email = u.email COLLATE NOCASE)"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = \'owner\')"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.id AND m.user_id = _USER_.id AND m.role = \'owner\')"
 }, {
@@ -50,7 +54,11 @@ record_apis: [{
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
   create_access_rule: "_REQ_.created_by = _USER_.id"
-  read_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = _ROW_.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = _ROW_.id AND t.visibility = \'public\')"
+  # Markets are the account's, not a tote's, so visibility no longer follows
+  # tote_markets: you see your own, plus those of anyone you share a tote with.
+  # Without this second clause a shared tote's members could not see each
+  # other's shops, and every item routed to one would look unrouted to them.
+  read_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = _ROW_.created_by)"
   update_access_rule: "_ROW_.created_by = _USER_.id"
   delete_access_rule: "_ROW_.created_by = _USER_.id"
 }, {
@@ -58,10 +66,27 @@ record_apis: [{
   table_name: "departments"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _REQ_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m.user_id = _USER_.id)))"
-  read_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN tote_members AS m ON m.tote_id = tm.tote_id WHERE tm.market_id = w.id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM tote_markets AS tm JOIN totes AS t ON t.id = tm.tote_id WHERE tm.market_id = w.id AND t.visibility = \'public\')))"
-  update_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND w.created_by = _USER_.id)"
-  delete_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND w.created_by = _USER_.id)"
+  # A department no longer hangs off one market, so visibility reaches through
+  # market_departments: yours, or attached to a market you can already see.
+  create_access_rule: "_REQ_.created_by = _USER_.id AND (_REQ_.owner_market_id IS NULL OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _REQ_.owner_market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by))))"
+  read_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM market_departments AS md JOIN markets AS w ON w.id = md.market_id WHERE md.department_id = _ROW_.id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by)))"
+  update_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.owner_market_id AND w.created_by = _USER_.id)"
+  delete_access_rule: "_ROW_.created_by = _USER_.id OR EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.owner_market_id AND w.created_by = _USER_.id)"
+}, {
+  name: "market_departments"
+  table_name: "market_departments"
+  acl_authenticated: [CREATE, READ, UPDATE, DELETE]
+  enable_subscriptions: true
+  # Deliberately validates only the market, never _REQ_.department_id. The
+  # classifier creates a department and attaches it in the same tick, and a
+  # rule that required the department row to exist first would reintroduce the
+  # creation deadlock this release just fixed (see the totes read rule).
+  # Department ids are unguessable; the worst case is an attachment you cannot
+  # read anyway.
+  create_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _REQ_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by)))"
+  read_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by)))"
+  update_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by)))"
+  delete_access_rule: "EXISTS(SELECT 1 FROM markets AS w WHERE w.id = _ROW_.market_id AND (w.created_by = _USER_.id OR EXISTS(SELECT 1 FROM tote_members AS mine JOIN tote_members AS theirs ON theirs.tote_id = mine.tote_id WHERE mine.user_id = _USER_.id AND theirs.user_id = w.created_by)))"
 }, {
   name: "tote_markets"
   table_name: "tote_markets"
@@ -76,7 +101,7 @@ record_apis: [{
   table_name: "items"
   acl_authenticated: [CREATE, READ, UPDATE, DELETE]
   enable_subscriptions: true
-  create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id) AND (_REQ_.market_id IS NULL OR EXISTS(SELECT 1 FROM tote_markets AS tm WHERE tm.tote_id = _REQ_.tote_id AND tm.market_id = _REQ_.market_id))"
+  create_access_rule: "_REQ_.created_by = _USER_.id AND EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _REQ_.tote_id AND m.user_id = _USER_.id)"
   read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = \'public\')"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"

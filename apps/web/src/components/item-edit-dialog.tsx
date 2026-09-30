@@ -5,7 +5,7 @@
 import { useState } from 'react'
 
 import { itemsCollection, type ItemRow } from '#/db/collections'
-import { useAttachedMarkets, useMemberInitial, useToteMembers } from '#/db/hooks'
+import { useMarketsWithDepartments, useMemberInitial, useToteMembers } from '#/db/hooks'
 import { UNITS, type Unit } from '#/lib/classify/units'
 import { Button } from '#/components/ui/button'
 import { Dialog } from '#/components/ui/dialog'
@@ -13,7 +13,7 @@ import { Input, Select } from '#/components/ui/input'
 import { m } from '#/paraglide/messages'
 
 export function ItemEditDialog({ item, onClose }: { item: ItemRow; onClose: () => void }) {
-  const attached = useAttachedMarkets(item.tote_id)
+  const attached = useMarketsWithDepartments()
   const members = useToteMembers(item.tote_id)
   const initialOf = useMemberInitial(item.tote_id)
   const [marketId, setMarketId] = useState(item.market_id ?? '')

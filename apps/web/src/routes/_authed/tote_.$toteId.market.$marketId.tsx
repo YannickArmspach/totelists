@@ -1,15 +1,28 @@
 /**
- * The in-store page: one market of the active tote, its `buy` items grouped by
- * department. Departments are emergent — only ones with items here appear.
- * Dragging between groups re-routes; tapping the circle bags the item.
+ * The in-store page: one market, one tote — its `buy` items grouped by
+ * department, in that market's aisle order. Departments are emergent, only
+ * ones with items here appear. Dragging between groups re-routes the item;
+ * tapping the circle bags it.
+ *
+ * The cross-tote twin lives at /market/{id} and answers a different question
+ * ("what do I owe this shop, across every list?"). This one is what you hold
+ * while walking round with one list in mind, so both ids are in the URL.
  */
 import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
 
 import { itemsCollection } from '#/db/collections'
-import { useAttachedMarkets, useToteItems } from '#/db/hooks'
+import {
+  useCatalogMarkets,
+  useHydrated,
+  useMarketDepartments,
+  useTote,
+  useToteItems,
+} from '#/db/hooks'
 import { groupByDepartment, sortAtEnd, topBoughtTitles } from '#/lib/items'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
+import { fromUrlId, toUrlId } from '#/lib/url-id'
 import { useActiveTote } from '#/stores/active-tote'
 import { BoughtToday } from '#/components/bought-today'
 import { BuyRow } from '#/components/buy-row'
@@ -17,22 +30,46 @@ import { GroupedSortable, type MoveResult } from '#/components/grouped-sortable'
 import { Badge } from '#/components/ui/badge'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/markets_/$marketId')({ component: MarketPage })
+export const Route = createFileRoute('/_authed/tote_/$toteId/market/$marketId')({
+  component: ToteMarketPage,
+  // The URL carries the ids without their `==` padding; see lib/url-id.
+  params: {
+    parse: ({ toteId, marketId }) => ({
+      toteId: fromUrlId(toteId),
+      marketId: fromUrlId(marketId),
+    }),
+    stringify: ({ toteId, marketId }) => ({
+      toteId: toUrlId(toteId),
+      marketId: toUrlId(marketId),
+    }),
+  },
+})
 
-function MarketPage() {
-  const { marketId } = Route.useParams()
-  const { activeToteId } = useActiveTote()
-  const attached = useAttachedMarkets(activeToteId)
-  const items = useToteItems(activeToteId)
+function ToteMarketPage() {
+  const { toteId, marketId } = Route.useParams()
+  const hydrated = useHydrated()
+  const tote = useTote(toteId)
+  const markets = useCatalogMarkets()
+  const departments = useMarketDepartments(marketId)
+  const items = useToteItems(toteId)
+  const { setActiveTote } = useActiveTote()
 
-  const entry = attached.find(({ market }) => market.id === marketId)
-  if (!entry) return <p className="pt-8 text-center text-sm text-muted-foreground">{m.not_found()}</p>
+  // Shopping this list here makes it the active one, like opening the tote.
+  useEffect(() => {
+    if (hydrated && tote) setActiveTote(tote.id)
+  }, [hydrated, tote, setActiveTote])
+
+  if (!hydrated) return null
+
+  const market = markets.find((entry) => entry.id === marketId)
+  if (!tote || !market) {
+    return <p className="pt-8 text-center text-sm text-muted-foreground">{m.not_found()}</p>
+  }
 
   const marketItems = items.filter((item) => item.market_id === marketId)
   const buyItems = marketItems.filter((item) => item.status === 'buy')
-  const groups = groupByDepartment(buyItems, entry.departments)
-
-  const suggestions = topBoughtTitles(items, activeToteId!, marketId)
+  const groups = groupByDepartment(buyItems, departments)
+  const suggestions = topBoughtTitles(items, toteId, marketId)
 
   const onMove = ({ itemId, groupKey, updates }: MoveResult) => {
     const departmentId = groupKey === 'other' ? null : groupKey
@@ -49,7 +86,7 @@ function MarketPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{entry.market.name}</h1>
+      <h1 className="text-xl font-semibold">{market.name}</h1>
 
       {buyItems.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground">{m.list_empty()}</p>
@@ -72,8 +109,9 @@ function MarketPage() {
             <BuyRow
               item={item}
               bucket={
-                groups.find((group) => (group.department?.id ?? null) === (item.department_id ?? null))
-                  ?.items ?? buyItems
+                groups.find(
+                  (group) => (group.department?.id ?? null) === (item.department_id ?? null),
+                )?.items ?? buyItems
               }
             />
           )}
@@ -91,7 +129,7 @@ function MarketPage() {
                 onClick={() =>
                   itemsCollection.insert({
                     id: newId(),
-                    tote_id: activeToteId!,
+                    tote_id: toteId,
                     created_by: currentUserId(),
                     market_id: marketId,
                     department_id: null,
@@ -115,7 +153,7 @@ function MarketPage() {
         </section>
       )}
 
-      <BoughtToday toteId={activeToteId!} items={marketItems} />
+      <BoughtToday toteId={toteId} items={marketItems} />
     </div>
   )
 }

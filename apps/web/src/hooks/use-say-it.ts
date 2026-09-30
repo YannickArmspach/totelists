@@ -12,6 +12,7 @@
 import { useCallback, useState } from 'react'
 
 import { departmentsCollection, itemsCollection } from '#/db/collections'
+import { attachDepartment } from '#/lib/catalog'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 import { getLocale } from '#/paraglide/runtime'
@@ -40,7 +41,13 @@ async function classifyAndInsert(
   const userId = currentUserId() ?? null
   const now = Math.floor(Date.now() / 1000)
 
-  // One department per proposed (market, name), however many items point at it.
+  /*
+    One department per proposed (market, name), however many items point at it.
+    A proposal is about one store, so it lands as CUSTOM to that market rather
+    than as a shared preset — the user promotes it deliberately if they want it
+    everywhere. Creating and attaching in the same tick is safe because
+    market_departments' CREATE rule validates only the market.
+  */
   const created = new Map<string, string>()
   for (const item of items) {
     if (!item.market_id || !item.new_department_name) continue
@@ -50,13 +57,13 @@ async function classifyAndInsert(
     created.set(key, id)
     departmentsCollection.insert({
       id,
-      market_id: item.market_id,
       created_by: userId,
       name: item.new_department_name,
       classification_hint: item.new_department_hint ?? '',
-      sort: 999, // Ends up last; the user reorders if they care.
+      owner_market_id: item.market_id,
       auto_created: 1,
     })
+    attachDepartment(item.market_id, id, 999) // Last; the user reorders if they care.
   }
 
   let sort = now

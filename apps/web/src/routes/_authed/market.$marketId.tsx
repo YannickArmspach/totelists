@@ -1,23 +1,26 @@
 /**
- * A market's page across every tote: /user-{ownerId}/market-{marketId} shows
- * all my to-buy items routed to this market, flat or grouped by tote — the
- * standing-in-the-store view, whichever lists the items came from. Rows are
- * the same live BuyRow as a tote page: check off, edit, star, drag to reorder.
- *
- * Only the marketId loads anything; the userId half of the slug is the
- * market creator's id, there to namespace the URL, and is not verified.
+ * A market's page across every tote: /market/{marketId} shows all my to-buy
+ * items routed to this market, flat or grouped by tote — the standing-in-the-
+ * store view, whichever lists the items came from. Rows are the same live
+ * BuyRow as a tote page: check off, edit, star, drag to reorder.
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { itemsCollection } from '#/db/collections'
 import { useAllItems, useCatalogMarkets, useHydrated, useMyTotes } from '#/db/hooks'
+import { fromUrlId, toUrlId } from '#/lib/url-id'
 import { BuyRow } from '#/components/buy-row'
 import { GroupedSortable } from '#/components/grouped-sortable'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/user-{$userId}/market-{$marketId}')({
+export const Route = createFileRoute('/_authed/market/$marketId')({
   component: MarketPage,
+  // The URL carries the id without its `==` padding; see lib/url-id.
+  params: {
+    parse: ({ marketId }) => ({ marketId: fromUrlId(marketId) }),
+    stringify: ({ marketId }) => ({ marketId: toUrlId(marketId) }),
+  },
 })
 
 function MarketPage() {

@@ -25,8 +25,8 @@ function item(overrides: Partial<ItemRow>): ItemRow {
   }
 }
 
-function dept(id: string, sort: number): DepartmentRow {
-  return { id, market_id: 'mkt', name: id, classification_hint: '', sort, auto_created: 0 }
+function dept(id: string): DepartmentRow {
+  return { id, name: id, classification_hint: '', owner_market_id: null, auto_created: 0 }
 }
 
 describe('status transitions', () => {
@@ -54,21 +54,28 @@ describe('status transitions', () => {
 })
 
 describe('groupByDepartment', () => {
-  it('is emergent: only departments with items appear, in sort order, Other last', () => {
-    const departments = [dept('d-b', 2), dept('d-a', 1), dept('d-empty', 3)]
-    const items = [
-      item({ id: '1', department_id: 'd-b', sort: 1 }),
-      item({ id: '2', department_id: 'd-a', sort: 1 }),
-      item({ id: '3', department_id: null, sort: 1 }),
-      item({ id: '4', department_id: 'd-a', sort: 0.5 }),
-    ]
-    const groups = groupByDepartment(items, departments)
+  const items = [
+    item({ id: '1', department_id: 'd-b', sort: 1 }),
+    item({ id: '2', department_id: 'd-a', sort: 1 }),
+    item({ id: '3', department_id: null, sort: 1 }),
+    item({ id: '4', department_id: 'd-a', sort: 0.5 }),
+  ]
+
+  it('is emergent: only departments with items appear, Other last', () => {
+    const groups = groupByDepartment(items, [dept('d-a'), dept('d-b'), dept('d-empty')])
     expect(groups.map((group) => group.department?.id ?? 'other')).toEqual(['d-a', 'd-b', 'other'])
     expect(groups[0]!.items.map((entry) => entry.id)).toEqual(['4', '2'])
   })
 
+  it('takes its order from the caller, which is this market’s aisle order', () => {
+    // The same preset can sit first in one store and last in another, so the
+    // order lives on the market_departments row — never on the department.
+    const groups = groupByDepartment(items, [dept('d-b'), dept('d-a')])
+    expect(groups.map((group) => group.department?.id ?? 'other')).toEqual(['d-b', 'd-a', 'other'])
+  })
+
   it('sends items pointing at an unknown department to Other', () => {
-    const groups = groupByDepartment([item({ department_id: 'ghost' })], [dept('d-a', 1)])
+    const groups = groupByDepartment([item({ department_id: 'ghost' })], [dept('d-a')])
     expect(groups).toHaveLength(1)
     expect(groups[0]!.department).toBeNull()
   })

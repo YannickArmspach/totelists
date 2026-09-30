@@ -1,11 +1,11 @@
 /**
- * The six collections the app lives in, all backed by TrailBase record APIs
+ * The seven collections the app lives in, all backed by TrailBase record APIs
  * with subscriptions on — every browser of every member sees writes live.
  *
  * They sync UNFILTERED: everything the row-level read rules allow, i.e. all of
  * my totes plus public ones. Per-view filtering (active tote, status, market)
  * happens in TanStack DB live queries — which is what makes the cross-tote
- * overview a plain client-side query.
+ * market page a plain client-side query.
  *
  * Tote is account-only; the `_authed` layout redirects to /login before any of
  * this is asked to sync, so there is no local-storage branch here.
@@ -28,6 +28,8 @@ export interface ToteRow {
   /** What this tote is for; shown on its card on the home strip. */
   description?: string
   visibility: Visibility
+  /** Display order across the account. */
+  sort?: number
   /** Join secret for private totes; null = link joining disabled. */
   invite_code?: string | null
   created_at?: number
@@ -54,33 +56,43 @@ export interface ToteInviteRow {
   created_at?: number
 }
 
-/** Catalog entity: owned by its creator, attached to totes via tote_markets. */
+/**
+ * A shop, owned by its creator and available to every one of their totes —
+ * you shop the same handful of places whatever list you are carrying.
+ */
 export interface MarketRow {
   id: string
   created_by?: string | null
   name: string
   classification_hint: string
+  /** Display order across the account. */
+  sort?: number
   created_at?: number
   updated_at?: number
 }
 
-/** Catalog entity: nested category of a market. */
+/**
+ * Catalog entity: a shelf category, attached to markets via market_departments.
+ *
+ * `owner_market_id` null = a reusable PRESET in the creator's catalog, shared
+ * by every market that attaches it. Set = CUSTOM to that one market, never
+ * offered elsewhere, deleted with it.
+ */
 export interface DepartmentRow {
   id: string
-  market_id: string
   created_by?: string | null
   name: string
   classification_hint: string
-  sort: number
+  owner_market_id?: string | null
   auto_created: number
   created_at?: number
 }
 
-/** The attach: which markets a tote uses, and in what order. */
-export interface ToteMarketRow {
+/** The attach: which departments a market has, and in what order there. */
+export interface MarketDepartmentRow {
   id: string
-  tote_id: string
   market_id: string
+  department_id: string
   sort: number
   created_at?: number
 }
@@ -151,5 +163,6 @@ export const toteMembersCollection = openCollection<ToteMemberRow>('tote_members
 export const toteInvitesCollection = openCollection<ToteInviteRow>('tote_invites')
 export const marketsCollection = openCollection<MarketRow>('markets')
 export const departmentsCollection = openCollection<DepartmentRow>('departments')
-export const toteMarketsCollection = openCollection<ToteMarketRow>('tote_markets')
+export const marketDepartmentsCollection =
+  openCollection<MarketDepartmentRow>('market_departments')
 export const itemsCollection = openCollection<ItemRow>('items')

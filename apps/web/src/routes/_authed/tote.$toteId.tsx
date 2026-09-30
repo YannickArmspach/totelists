@@ -1,11 +1,8 @@
 /**
- * A tote's page: /user-{ownerId}/tote-{toteId}. The say-it button over the
- * review inbox, market tiles with their to-buy counts — or, for a tote with no
- * markets, the flat list itself. Home keeps the capture surface; this is where
- * a tote actually lives.
- *
- * Only the toteId loads anything; the userId half of the slug is the owner's
- * id, there to namespace the URL, and is not verified.
+ * A tote's page: /tote/{toteId}. The say-it button over the review inbox,
+ * market tiles with their to-buy counts — or, for a tote with no markets, the
+ * flat list itself. Home keeps the capture surface; this is where a tote
+ * actually lives.
  */
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
@@ -13,13 +10,14 @@ import { ChevronRight, Store } from 'lucide-react'
 
 import { itemsCollection } from '#/db/collections'
 import {
-  useAttachedMarkets,
+  useMarketsWithDepartments,
   useClassifyMarkets,
   useHydrated,
   useTote,
   useToteItems,
 } from '#/db/hooks'
 import { useActiveTote } from '#/stores/active-tote'
+import { fromUrlId, toUrlId } from '#/lib/url-id'
 import { AddIt } from '#/components/add-it'
 import { ReviewInbox } from '#/components/review-inbox'
 import { BoughtToday } from '#/components/bought-today'
@@ -27,8 +25,13 @@ import { BuyRow } from '#/components/buy-row'
 import { GroupedSortable } from '#/components/grouped-sortable'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/user-{$userId}/tote-{$toteId}')({
+export const Route = createFileRoute('/_authed/tote/$toteId')({
   component: TotePage,
+  // The URL carries the id without its `==` padding; see lib/url-id.
+  params: {
+    parse: ({ toteId }) => ({ toteId: fromUrlId(toteId) }),
+    stringify: ({ toteId }) => ({ toteId: toUrlId(toteId) }),
+  },
 })
 
 function TotePage() {
@@ -43,8 +46,8 @@ function TotePage() {
     if (hydrated && tote) setActiveTote(tote.id)
   }, [hydrated, tote, setActiveTote])
 
-  const markets = useAttachedMarkets(toteId)
-  const classifyMarkets = useClassifyMarkets(toteId)
+  const markets = useMarketsWithDepartments()
+  const classifyMarkets = useClassifyMarkets()
   const items = useToteItems(toteId)
 
   if (!hydrated) return null
@@ -77,8 +80,8 @@ function TotePage() {
           {markets.map(({ market }) => (
             <Link
               key={market.id}
-              to="/markets/$marketId"
-              params={{ marketId: market.id }}
+              to="/tote/$toteId/market/$marketId"
+              params={{ toteId: tote.id, marketId: market.id }}
               className="flex min-h-13 items-center gap-3 rounded-xl border bg-card px-4 hover:bg-secondary"
             >
               <Store className="size-5 text-primary" />

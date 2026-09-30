@@ -1,5 +1,5 @@
 /**
- * Live reads of the six collections.
+ * Live reads of the seven collections.
  *
  * The collections sync unfiltered (everything the access rules allow); these
  * hooks do the per-view filtering in plain JS over live query results, which
@@ -14,16 +14,16 @@ import type { ClassifyMarket } from '#/lib/classify/schema'
 import {
   departmentsCollection,
   itemsCollection,
+  marketDepartmentsCollection,
   marketsCollection,
   toteInvitesCollection,
-  toteMarketsCollection,
   toteMembersCollection,
   totesCollection,
   type DepartmentRow,
   type ItemRow,
+  type MarketDepartmentRow,
   type MarketRow,
   type ToteInviteRow,
-  type ToteMarketRow,
   type ToteMemberRow,
   type ToteRow,
 } from './collections'
@@ -43,6 +43,7 @@ const NO_MEMBERS: ToteMemberRow[] = []
 const NO_ITEMS: ItemRow[] = []
 const NO_MARKETS: MarketRow[] = []
 const NO_DEPARTMENTS: DepartmentRow[] = []
+const NO_MARKET_DEPARTMENTS: MarketDepartmentRow[] = []
 
 function useToteRows() {
   return useLiveQuery({ query: (q) => q.from({ totes: totesCollection }) })
@@ -60,15 +61,15 @@ function useDepartmentRows() {
   return useLiveQuery({ query: (q) => q.from({ departments: departmentsCollection }) })
 }
 
-function useAttachmentRows() {
-  return useLiveQuery({ query: (q) => q.from({ attachments: toteMarketsCollection }) })
+function useMarketDepartmentRows() {
+  return useLiveQuery({ query: (q) => q.from({ rows: marketDepartmentsCollection }) })
 }
 
 function useItemRows() {
   return useLiveQuery({ query: (q) => q.from({ items: itemsCollection }) })
 }
 
-/** The totes I'm a member of, oldest first (ids sort by creation). */
+/** The totes I'm a member of, in the order the user arranged them. */
 export function useMyTotes(): ToteRow[] {
   const hydrated = useHydrated()
   const user = useUser()
@@ -77,7 +78,9 @@ export function useMyTotes(): ToteRow[] {
   return useMemo(() => {
     if (!hydrated || !user) return NO_TOTES
     const mine = new Set(members.filter((row) => row.user_id === user.id).map((row) => row.tote_id))
-    return totes.filter((tote) => mine.has(tote.id)).sort((a, b) => a.id.localeCompare(b.id))
+    return totes
+      .filter((tote) => mine.has(tote.id))
+      .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.id.localeCompare(b.id))
   }, [hydrated, user, totes, members])
 }
 
@@ -174,72 +177,118 @@ export function useMemberInitial(toteId: string | null | undefined): (userId: st
   }, [members])
 }
 
-export interface AttachedMarket {
-  attachment: ToteMarketRow
+export interface MarketWithDepartments {
   market: MarketRow
   departments: DepartmentRow[]
 }
 
-/** A tote's attached markets, in per-tote order, with their departments. */
-export function useAttachedMarkets(toteId: string | null | undefined): AttachedMarket[] {
-  const hydrated = useHydrated()
-  const { data: attachments } = useAttachmentRows()
-  const { data: markets } = useMarketRows()
-  const { data: departments } = useDepartmentRows()
-  return useMemo(() => {
-    if (!hydrated || !toteId) return []
-    const marketById = new Map(markets.map((market) => [market.id, market]))
-    return attachments
-      .filter((row) => row.tote_id === toteId)
-      .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
-      .flatMap((attachment) => {
-        const market = marketById.get(attachment.market_id)
-        if (!market) return []
-        return [
-          {
-            attachment,
-            market,
-            departments: departments
-              .filter((dept) => dept.market_id === market.id)
-              .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id)),
-          },
-        ]
-      })
-  }, [hydrated, toteId, attachments, markets, departments])
-}
-
-/** The catalog markets this user could attach: theirs + reachable ones. */
-export function useCatalogMarkets(): MarketRow[] {
-  const hydrated = useHydrated()
-  const { data } = useMarketRows()
-  return useMemo(
-    () => (hydrated ? [...data].sort((a, b) => a.name.localeCompare(b.name)) : NO_MARKETS),
-    [hydrated, data],
-  )
-}
-
+/** A market's departments, in that market's order. */
 export function useMarketDepartments(marketId: string | null | undefined): DepartmentRow[] {
   const hydrated = useHydrated()
-  const { data } = useDepartmentRows()
+  const { data: departments } = useDepartmentRows()
+  const { data: marketDepartments } = useMarketDepartmentRows()
+  return useMemo(() => {
+    if (!hydrated || !marketId) return NO_DEPARTMENTS
+    const departmentById = new Map(departments.map((dept) => [dept.id, dept]))
+    return marketDepartments
+      .filter((row) => row.market_id === marketId)
+      .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
+      .flatMap((row) => {
+        const dept = departmentById.get(row.department_id)
+        return dept ? [dept] : []
+      })
+  }, [hydrated, marketId, departments, marketDepartments])
+}
+
+/** A market's attach rows, in order — what the sortable selector edits. */
+export function useMarketDepartmentRowsFor(
+  marketId: string | null | undefined,
+): MarketDepartmentRow[] {
+  const hydrated = useHydrated()
+  const { data } = useMarketDepartmentRows()
   return useMemo(
     () =>
       hydrated && marketId
         ? data
-            .filter((dept) => dept.market_id === marketId)
+            .filter((row) => row.market_id === marketId)
             .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
-        : NO_DEPARTMENTS,
+        : NO_MARKET_DEPARTMENTS,
     [hydrated, data, marketId],
   )
 }
 
-/** How many totes use a market — drives the "update everywhere / copy" ask. */
-export function useMarketUsage(marketId: string | null | undefined): ToteMarketRow[] {
+/** Every market↔department attach row this user can see. */
+export function useAllMarketDepartments(): MarketDepartmentRow[] {
   const hydrated = useHydrated()
-  const { data } = useAttachmentRows()
+  const { data } = useMarketDepartmentRows()
+  return hydrated ? data : NO_MARKET_DEPARTMENTS
+}
+
+/** Every reusable preset (never the market-local custom ones), name-sorted. */
+export function useDepartmentPresets(): DepartmentRow[] {
+  const hydrated = useHydrated()
+  const { data } = useDepartmentRows()
   return useMemo(
-    () => (hydrated && marketId ? data.filter((row) => row.market_id === marketId) : []),
-    [hydrated, data, marketId],
+    () =>
+      hydrated
+        ? data
+            .filter((dept) => !dept.owner_market_id)
+            .sort((a, b) => a.name.localeCompare(b.name))
+        : NO_DEPARTMENTS,
+    [hydrated, data],
   )
+}
+
+/** One department by id, preset or custom. */
+export function useDepartment(departmentId: string | null | undefined): DepartmentRow | undefined {
+  const { data } = useDepartmentRows()
+  return departmentId ? data.find((dept) => dept.id === departmentId) : undefined
+}
+
+/** Which markets use a department — the preset list's usage line. */
+export function useDepartmentUsage(departmentId: string | null | undefined): MarketDepartmentRow[] {
+  const hydrated = useHydrated()
+  const { data } = useMarketDepartmentRows()
+  return useMemo(
+    () =>
+      hydrated && departmentId
+        ? data.filter((row) => row.department_id === departmentId)
+        : NO_MARKET_DEPARTMENTS,
+    [hydrated, data, departmentId],
+  )
+}
+
+/** Every market this user can see, in the account's chosen order. */
+export function useCatalogMarkets(): MarketRow[] {
+  const hydrated = useHydrated()
+  const { data } = useMarketRows()
+  return useMemo(
+    () =>
+      hydrated
+        ? [...data].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.name.localeCompare(b.name))
+        : NO_MARKETS,
+    [hydrated, data],
+  )
+}
+
+/** Every market with its departments, in order — what the list views need. */
+export function useMarketsWithDepartments(): MarketWithDepartments[] {
+  const markets = useCatalogMarkets()
+  const { data: departments } = useDepartmentRows()
+  const { data: marketDepartments } = useMarketDepartmentRows()
+  return useMemo(() => {
+    const departmentById = new Map(departments.map((dept) => [dept.id, dept]))
+    return markets.map((market) => ({
+      market,
+      departments: marketDepartments
+        .filter((row) => row.market_id === market.id)
+        .sort((a, b) => a.sort - b.sort || a.id.localeCompare(b.id))
+        .flatMap((row) => {
+          const dept = departmentById.get(row.department_id)
+          return dept ? [dept] : []
+        }),
+    }))
+  }, [markets, departments, marketDepartments])
 }
 
 export function useToteItems(toteId: string | null | undefined): ItemRow[] {
@@ -251,7 +300,7 @@ export function useToteItems(toteId: string | null | undefined): ItemRow[] {
   )
 }
 
-/** Everything readable, for the cross-tote overview and suggestion mining. */
+/** Everything readable, for cross-tote counts and suggestion mining. */
 export function useAllItems(): ItemRow[] {
   const hydrated = useHydrated()
   const { data } = useItemRows()
@@ -259,11 +308,11 @@ export function useAllItems(): ItemRow[] {
 }
 
 /** The active tote's catalog, in the wire shape /api/classify expects. */
-export function useClassifyMarkets(toteId: string | null | undefined): ClassifyMarket[] {
-  const attached = useAttachedMarkets(toteId)
+export function useClassifyMarkets(): ClassifyMarket[] {
+  const entries = useMarketsWithDepartments()
   return useMemo(
     () =>
-      attached.map(({ market, departments }) => ({
+      entries.map(({ market, departments }) => ({
         id: market.id,
         name: market.name,
         classification_hint: market.classification_hint,
@@ -273,6 +322,6 @@ export function useClassifyMarkets(toteId: string | null | undefined): ClassifyM
           classification_hint: dept.classification_hint,
         })),
       })),
-    [attached],
+    [entries],
   )
 }

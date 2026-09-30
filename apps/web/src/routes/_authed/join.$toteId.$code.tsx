@@ -11,10 +11,18 @@ import { useHydrated } from '#/db/hooks'
 import { client, currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
+import { fromUrlId, toUrlId } from '#/lib/url-id'
 import { Button } from '#/components/ui/button'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/join/$toteId/$code')({ component: JoinPage })
+export const Route = createFileRoute('/_authed/join/$toteId/$code')({
+  component: JoinPage,
+  // Invite links carry the short id; `code` is free-form text and passes through.
+  params: {
+    parse: ({ toteId, code }) => ({ toteId: fromUrlId(toteId), code }),
+    stringify: ({ toteId, code }) => ({ toteId: toUrlId(toteId), code }),
+  },
+})
 
 function JoinPage() {
   const { toteId, code } = Route.useParams()

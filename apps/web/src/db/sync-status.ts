@@ -13,9 +13,9 @@ import { useSyncExternalStore } from 'react'
 import {
   departmentsCollection,
   itemsCollection,
+  marketDepartmentsCollection,
   marketsCollection,
   toteInvitesCollection,
-  toteMarketsCollection,
   toteMembersCollection,
   totesCollection,
 } from './collections'
@@ -29,7 +29,7 @@ const ALL_COLLECTIONS = [
   toteInvitesCollection,
   marketsCollection,
   departmentsCollection,
-  toteMarketsCollection,
+  marketDepartmentsCollection,
   itemsCollection,
 ] as const
 

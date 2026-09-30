@@ -1,7 +1,7 @@
 /**
  * Home's market shortcuts: every market the account can see, each with its
  * to-buy count summed across all my totes. A tap opens the cross-tote market
- * page, /user-{ownerId}/market-{marketId} — one glance before walking in says
+ * page, /market/{marketId} — one glance before walking in says
  * what this store owes every list at once.
  */
 import { Link } from '@tanstack/react-router'
@@ -28,8 +28,8 @@ export function MyMarkets() {
       {markets.map((market) => (
         <Link
           key={market.id}
-          to="/user-{$userId}/market-{$marketId}"
-          params={{ userId: market.created_by ?? 'unknown', marketId: market.id }}
+          to="/market/$marketId"
+          params={{ marketId: market.id }}
           className="flex min-h-13 items-center gap-3 rounded-xl border bg-card px-4 hover:bg-secondary"
         >
           <Store className="size-5 text-primary" />

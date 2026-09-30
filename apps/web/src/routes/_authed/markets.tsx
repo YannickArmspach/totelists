@@ -1,172 +1,83 @@
 /**
- * The active tote's markets: attach from the catalog, create new ones, edit
- * (with the update-everywhere / copy-for-this-tote flow), reorder, detach.
+ * My markets: every shop on the account, in the order you want to see them.
+ *
+ * Markets are no longer attached to individual totes — you shop the same few
+ * places whatever list you are carrying — so this is a plain catalog, the same
+ * shape as /totes. Dragging sets the order the tiles take on every tote page.
  */
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
-import { ChevronDown, ChevronUp, Pencil, Unlink } from 'lucide-react'
+import { Pencil, Plus, Store } from 'lucide-react'
 
-import { marketsCollection, toteMarketsCollection } from '#/db/collections'
-import { useAttachedMarkets, useCatalogMarkets, useToteItems } from '#/db/hooks'
-import { detachMarket } from '#/lib/catalog'
-import { currentUserId } from '#/lib/auth'
-import { newId } from '#/db/ids'
-import { useActiveTote } from '#/stores/active-tote'
-import { CatalogTabs } from '#/components/catalog-tabs'
-import { MarketEditDialog } from '#/components/market-editor'
-import { Button } from '#/components/ui/button'
-import { Input, Select, Textarea } from '#/components/ui/input'
+import { marketsCollection } from '#/db/collections'
+import { useAllItems, useCatalogMarkets, useHydrated, useMyTotes } from '#/db/hooks'
+import { SortableList } from '#/components/sortable-list'
 import { m } from '#/paraglide/messages'
 
 export const Route = createFileRoute('/_authed/markets')({ component: MarketsPage })
 
 function MarketsPage() {
-  const { activeToteId } = useActiveTote()
-  const attached = useAttachedMarkets(activeToteId)
-  const catalog = useCatalogMarkets()
-  const items = useToteItems(activeToteId)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const hydrated = useHydrated()
+  const markets = useCatalogMarkets()
+  const totes = useMyTotes()
+  const items = useAllItems()
 
-  if (!activeToteId) return null
+  if (!hydrated) return null
 
-  const attachedIds = new Set(attached.map(({ market }) => market.id))
-  const attachable = catalog.filter((market) => !attachedIds.has(market.id))
-
-  const reorder = (index: number, direction: -1 | 1) => {
-    const other = attached[index + direction]
-    const current = attached[index]
-    if (!other || !current) return
-    // Swapping the two sort values is enough for arrow-button reordering.
-    toteMarketsCollection.update(current.attachment.id, (draft) => {
-      draft.sort = other.attachment.sort
-    })
-    toteMarketsCollection.update(other.attachment.id, (draft) => {
-      draft.sort = current.attachment.sort
-    })
-  }
+  const myToteIds = new Set(totes.map((tote) => tote.id))
+  const buyCount = (marketId: string) =>
+    items.filter(
+      (item) => item.status === 'buy' && item.market_id === marketId && myToteIds.has(item.tote_id),
+    ).length
 
   return (
-    <div className="flex flex-col gap-6">
-      <CatalogTabs />
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold">{m.markets_title()}</h1>
 
-      <ul className="flex flex-col gap-3">
-        {attached.map((entry, index) => (
-          <li key={entry.attachment.id} className="rounded-xl border bg-card p-3">
-            <div className="flex items-center gap-1">
-              <div className="min-w-0 flex-1">
-                <span className="font-medium">{entry.market.name}</span>
-                {entry.market.classification_hint && (
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {entry.market.classification_hint}
-                  </span>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" aria-label="up" disabled={index === 0} onClick={() => reorder(index, -1)}>
-                <ChevronUp />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="down"
-                disabled={index === attached.length - 1}
-                onClick={() => reorder(index, 1)}
-              >
-                <ChevronDown />
-              </Button>
-              <Button variant="ghost" size="icon" aria-label={m.edit()} onClick={() => setEditingId(entry.market.id)}>
-                <Pencil />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={m.detach()}
-                onClick={() => detachMarket(activeToteId, entry.attachment, items)}
-              >
-                <Unlink />
-              </Button>
-            </div>
-            {editingId === entry.market.id && (
-              <MarketEditDialog toteId={activeToteId} entry={entry} onClose={() => setEditingId(null)} />
-            )}
-          </li>
-        ))}
-      </ul>
-
-      <Link to="/departments" className="text-sm text-muted-foreground underline underline-offset-2">
-        {m.manage_departments()} →
-      </Link>
-
-      {attachable.length > 0 && (
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const marketId = String(new FormData(event.currentTarget).get('market') ?? '')
-            if (!marketId) return
-            toteMarketsCollection.insert({
-              id: newId(),
-              tote_id: activeToteId,
-              market_id: marketId,
-              sort: attached.length + 1,
+      <SortableList
+        items={markets}
+        onReorder={(ordered) => {
+          // A short list, so renumbering all of it beats fractional ranking.
+          ordered.forEach((market, index) => {
+            if (market.sort === index + 1) return
+            marketsCollection.update(market.id, (draft) => {
+              draft.sort = index + 1
             })
-          }}
-        >
-          <Select name="market" aria-label={m.attach_market()} defaultValue="">
-            <option value="" disabled>
-              {m.attach_market()}
-            </option>
-            {attachable.map((market) => (
-              <option key={market.id} value={market.id}>
-                {market.name}
-              </option>
-            ))}
-          </Select>
-          <Button type="submit" variant="secondary">
-            {m.add()}
-          </Button>
-        </form>
-      )}
-
-      <NewMarketForm
-        onCreate={(name, hint) => {
-          const marketId = newId()
-          marketsCollection.insert({
-            id: marketId,
-            created_by: currentUserId(),
-            name,
-            classification_hint: hint,
-          })
-          toteMarketsCollection.insert({
-            id: newId(),
-            tote_id: activeToteId,
-            market_id: marketId,
-            sort: attached.length + 1,
           })
         }}
+        renderItem={(market) => (
+          <div className="flex min-h-13 items-center gap-2 rounded-xl border bg-card px-3">
+            <Link
+              to="/market/$marketId"
+              params={{ marketId: market.id }}
+              className="flex min-w-0 flex-1 items-center gap-3 py-2"
+            >
+              <Store className="size-5 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate font-medium">{market.name}</span>
+              {buyCount(market.id) > 0 && (
+                <span className="shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-sm font-semibold text-primary-foreground">
+                  {buyCount(market.id)}
+                </span>
+              )}
+            </Link>
+            <Link
+              to="/market/$marketId/edit"
+              params={{ marketId: market.id }}
+              aria-label={m.edit_market_title()}
+              className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-secondary"
+            >
+              <Pencil className="size-4" />
+            </Link>
+          </div>
+        )}
       />
-    </div>
-  )
-}
 
-function NewMarketForm({ onCreate }: { onCreate: (name: string, hint: string) => void }) {
-  return (
-    <form
-      className="flex flex-col gap-2 rounded-xl border border-dashed p-3"
-      onSubmit={(event) => {
-        event.preventDefault()
-        const form = new FormData(event.currentTarget)
-        const name = String(form.get('name') ?? '').trim()
-        if (!name) return
-        onCreate(name, String(form.get('hint') ?? '').trim())
-        event.currentTarget.reset()
-      }}
-    >
-      <h2 className="text-sm font-medium text-muted-foreground">{m.new_market()}</h2>
-      <Input name="name" placeholder={m.market_name_label()} required />
-      <Textarea name="hint" placeholder={m.market_hint_placeholder()} />
-      <Button type="submit" variant="secondary" className="self-end">
-        {m.create()}
-      </Button>
-    </form>
+      <Link
+        to="/market/new"
+        className="flex min-h-13 items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm font-medium text-muted-foreground hover:bg-secondary"
+      >
+        <Plus className="size-4" />
+        {m.new_market()}
+      </Link>
+    </div>
   )
 }

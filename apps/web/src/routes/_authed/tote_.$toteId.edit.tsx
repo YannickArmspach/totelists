@@ -11,13 +11,20 @@ import { useMyMembership, useTote, useToteInvites, useToteMembers } from '#/db/h
 import { currentUserId, useUser } from '#/lib/auth'
 import { newId, newInviteCode } from '#/db/ids'
 import { useActiveTote } from '#/stores/active-tote'
+import { fromUrlId, toUrlId } from '#/lib/url-id'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
-import { Input, Select, Textarea } from '#/components/ui/input'
+import { Input } from '#/components/ui/input'
+import { ToteForm } from '#/components/tote-form'
 import { m } from '#/paraglide/messages'
 
-export const Route = createFileRoute('/_authed/totes_/$toteId/settings')({
+export const Route = createFileRoute('/_authed/tote_/$toteId/edit')({
   component: ToteSettingsPage,
+  // The URL carries the id without its `==` padding; see lib/url-id.
+  params: {
+    parse: ({ toteId }) => ({ toteId: fromUrlId(toteId) }),
+    stringify: ({ toteId }) => ({ toteId: toUrlId(toteId) }),
+  },
 })
 
 function ToteSettingsPage() {
@@ -37,54 +44,29 @@ function ToteSettingsPage() {
   const siteUrl =
     (import.meta.env.VITE_SITE_URL as string | undefined) ??
     (typeof window !== 'undefined' ? window.location.origin : '')
-  const inviteLink = tote.invite_code ? `${siteUrl}/join/${tote.id}/${tote.invite_code}` : null
+  // Built by hand rather than via the router, so the id needs shortening here
+  // too — this link gets copied, pasted and emailed.
+  const inviteLink = tote.invite_code
+    ? `${siteUrl}/join/${toUrlId(tote.id)}/${tote.invite_code}`
+    : null
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{m.tote_settings()}</h1>
 
-      <form
-        className="flex flex-col gap-2"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const form = new FormData(event.currentTarget)
-          const name = String(form.get('name') ?? '').trim()
-          if (!name || !isOwner) return
+      <ToteForm
+        tote={tote}
+        submitLabel={m.save()}
+        disabled={!isOwner}
+        onSubmit={async (fields) => {
           totesCollection.update(tote.id, (draft) => {
-            draft.name = name
-            draft.description = String(form.get('description') ?? '').trim()
-            draft.visibility = form.get('visibility') === 'public' ? 'public' : 'private'
+            draft.name = fields.name
+            draft.description = fields.description
+            draft.visibility = fields.visibility
             draft.updated_at = Math.floor(Date.now() / 1000)
           })
         }}
-      >
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {m.tote_name_label()}
-          <Input name="name" defaultValue={tote.name} disabled={!isOwner} required />
-        </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {m.tote_description_label()}
-          <Textarea
-            name="description"
-            defaultValue={tote.description ?? ''}
-            placeholder={m.tote_description_placeholder()}
-            disabled={!isOwner}
-            rows={2}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {m.visibility_label()}
-          <Select name="visibility" defaultValue={tote.visibility} disabled={!isOwner}>
-            <option value="private">{m.visibility_private()}</option>
-            <option value="public">{m.visibility_public()}</option>
-          </Select>
-        </label>
-        {isOwner && (
-          <Button type="submit" variant="secondary" className="self-end">
-            {m.save()}
-          </Button>
-        )}
-      </form>
+      />
 
       {inviteLink && (
         <section className="flex flex-col gap-2">

@@ -1,128 +1,86 @@
 /**
- * Catalog edit flows.
+ * Catalog edit flows: attaching, detaching, and diverging from a shared row.
  *
- * Markets/departments are shared catalog entities, so an in-place UPDATE is
- * only the creator's to make ("update everywhere"). Everyone else — and a
- * creator who chooses "copy for this tote" — goes through copy-on-write:
- * clone, then repoint THIS tote's attachment and items, leaving every other
- * tote on the original.
+ * Markets and department presets are shared, so editing one in place changes
+ * it for everyone using it. Copy-on-write is the way out: clone, then repoint
+ * only THIS market (or tote), leaving every other one on the original.
  *
  * There is no transaction across record-API calls, so the order is what keeps
- * a mid-failure harmless: create the copies first, repoint last. Retrying the
- * whole call after a partial failure only leaves an orphaned (unattached,
- * invisible) copy behind.
+ * a mid-failure harmless: create the copy first, repoint last. Retrying after
+ * a partial failure only leaves an orphaned (unattached, invisible) copy.
  */
 import {
   departmentsCollection,
   itemsCollection,
-  marketsCollection,
-  toteMarketsCollection,
+  marketDepartmentsCollection,
   type DepartmentRow,
   type ItemRow,
-  type MarketRow,
-  type ToteMarketRow,
+  type MarketDepartmentRow,
 } from '#/db/collections'
 import { currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 
-export interface MarketEdits {
-  name?: string
-  classification_hint?: string
-}
-
 export interface DepartmentEdits {
   name?: string
   classification_hint?: string
-  sort?: number
 }
 
 const epoch = () => Math.floor(Date.now() / 1000)
 
-/** Every id the caller needs to know about the clone. */
-export interface MarketCopy {
-  marketId: string
-  /** original department id → clone department id */
-  departments: Map<string, string>
+/**
+ * Put a department at the end of a market's list.
+ *
+ * Attaching validates only the market, so this never has to wait for the
+ * department row to land first — which is what lets the classifier create a
+ * department and attach it in the same tick without deadlocking.
+ */
+export function attachDepartment(marketId: string, departmentId: string, sort: number): string {
+  const id = newId()
+  marketDepartmentsCollection.insert({ id, market_id: marketId, department_id: departmentId, sort })
+  return id
 }
 
 /**
- * Copy-on-write a market for one tote: clone it (with `edits` applied) and its
- * departments, repoint the tote's attachment, then move the tote's items over.
+ * Detach a department from one market. A custom department (owned by this
+ * market) has nowhere else to live, so it goes too; a preset stays in the
+ * catalog for its other markets.
  */
-export function copyMarketForTote(
-  toteId: string,
-  market: MarketRow,
-  departments: DepartmentRow[],
-  attachment: ToteMarketRow,
-  items: ItemRow[],
-  edits: MarketEdits = {},
-): MarketCopy {
-  const userId = currentUserId()
-  const now = epoch()
-
-  const marketCopy: MarketRow = {
-    id: newId(),
-    created_by: userId,
-    name: edits.name ?? market.name,
-    classification_hint: edits.classification_hint ?? market.classification_hint,
+export function detachDepartment(attachment: MarketDepartmentRow, department?: DepartmentRow): void {
+  marketDepartmentsCollection.delete(attachment.id)
+  if (department?.owner_market_id === attachment.market_id) {
+    departmentsCollection.delete(department.id)
   }
-  marketsCollection.insert(marketCopy)
-
-  const departmentIdMap = new Map<string, string>()
-  for (const dept of departments) {
-    const copy: DepartmentRow = {
-      id: newId(),
-      market_id: marketCopy.id,
-      created_by: userId,
-      name: dept.name,
-      classification_hint: dept.classification_hint,
-      sort: dept.sort,
-      auto_created: dept.auto_created,
-    }
-    departmentIdMap.set(dept.id, copy.id)
-    departmentsCollection.insert(copy)
-  }
-
-  // Copies exist; from here on every step only repoints THIS tote.
-  toteMarketsCollection.update(attachment.id, (draft) => {
-    draft.market_id = marketCopy.id
-  })
-
-  for (const item of items) {
-    if (item.tote_id !== toteId || item.market_id !== market.id) continue
-    itemsCollection.update(item.id, (draft) => {
-      draft.market_id = marketCopy.id
-      draft.department_id = item.department_id
-        ? (departmentIdMap.get(item.department_id) ?? null)
-        : null
-      draft.updated_at = now
-    })
-  }
-
-  return { marketId: marketCopy.id, departments: departmentIdMap }
 }
 
+
 /**
- * Copy-on-write a single department: a sibling in the SAME market, owned by
- * the editor, and this tote's items move over to it.
+ * Copy-on-write a department into one market: a custom department owned by
+ * that market, replacing it in the market's list, with this tote's items moved
+ * over. This is how you diverge from a shared preset without touching the
+ * preset itself.
  */
-export function copyDepartmentForTote(
+export function copyDepartmentForMarket(
   toteId: string,
   department: DepartmentRow,
+  attachment: MarketDepartmentRow,
   items: ItemRow[],
   edits: DepartmentEdits = {},
 ): string {
   const now = epoch()
   const copy: DepartmentRow = {
     id: newId(),
-    market_id: department.market_id,
     created_by: currentUserId(),
     name: edits.name ?? department.name,
     classification_hint: edits.classification_hint ?? department.classification_hint,
-    sort: edits.sort ?? department.sort,
+    owner_market_id: attachment.market_id,
     auto_created: 0,
   }
   departmentsCollection.insert(copy)
+
+  // The copy takes the original's place, and its position, in this market.
+  marketDepartmentsCollection.update(attachment.id, (draft) => {
+    draft.department_id = copy.id
+  })
 
   for (const item of items) {
     if (item.tote_id !== toteId || item.department_id !== department.id) continue
@@ -134,41 +92,4 @@ export function copyDepartmentForTote(
   return copy.id
 }
 
-/**
- * Detach a market from a tote. The tote's items keep their titles but drop
- * back into the unrouted bucket — the market was only ever a grouping.
- */
-export function detachMarket(toteId: string, attachment: ToteMarketRow, items: ItemRow[]): void {
-  const now = epoch()
-  for (const item of items) {
-    if (item.tote_id !== toteId || item.market_id !== attachment.market_id) continue
-    itemsCollection.update(item.id, (draft) => {
-      draft.market_id = null
-      draft.department_id = null
-      draft.updated_at = now
-    })
-  }
-  toteMarketsCollection.delete(attachment.id)
-}
 
-/**
- * Merge one department into another (same market): repoint this tote's items,
- * then delete the source if the caller may (the collection surfaces the ACL
- * error if not).
- */
-export function mergeDepartment(
-  toteId: string,
-  from: DepartmentRow,
-  intoId: string,
-  items: ItemRow[],
-): void {
-  const now = epoch()
-  for (const item of items) {
-    if (item.tote_id !== toteId || item.department_id !== from.id) continue
-    itemsCollection.update(item.id, (draft) => {
-      draft.department_id = intoId
-      draft.updated_at = now
-    })
-  }
-  departmentsCollection.delete(from.id)
-}
