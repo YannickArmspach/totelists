@@ -6,7 +6,7 @@
  * bootstraps the depot — miss that line and the only way back in is a password
  * reset. So we watch for it, keep a copy, and reprint it on every start.
  */
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,6 +27,13 @@ const authComponent = join(tbDir, 'traildepot', 'wasm', 'trailbase_auth_ui_compo
 const WEB_URL = 'https://localhost:3000'
 const TB_URL = 'https://localhost:4000'
 const TB_ADDRESS = 'localhost:4100' // Vite's own port lives in apps/web/package.json.
+const AI_URL = 'http://localhost:5100' // Open WebUI; Ollama stays compose-internal.
+
+// The AI stack is Docker-based and optional: --no-ai skips it (pair with
+// FAKE_AI=1 in apps/web/.env for an offline voice loop).
+const aiCompose = ['compose', '-f', join(root, 'docker-compose.ai.yml')]
+const aiWanted = !process.argv.includes('--no-ai')
+let aiState = aiWanted ? 'starting…' : 'off (--no-ai)'
 
 const c = {
   reset: '\x1b[0m',
@@ -35,6 +42,7 @@ const c = {
   web: '\x1b[36m',
   tb: '\x1b[35m',
   tls: '\x1b[34m',
+  ai: '\x1b[95m',
   key: '\x1b[32m',
   warn: '\x1b[33m',
 }
@@ -77,6 +85,7 @@ function banner(credentials) {
     `${c.bold}Tote dev${c.reset} ${c.dim}— say it, we bag it.${c.reset}`,
     line('app', `${c.web}${WEB_URL}${c.reset}`),
     line('admin', `${c.tb}${TB_URL}/_/admin/${c.reset}`),
+    line('ai', `${c.ai}${AI_URL}${c.reset} ${c.dim}${aiState}${c.reset}`),
     line('sign in', `${c.web}${WEB_URL}/login${c.reset}`),
   ]
   if (credentials) {
@@ -135,6 +144,13 @@ function shutdown(code) {
   if (shuttingDown) return
   shuttingDown = true
   for (const child of children) child.kill('SIGTERM')
+  if (aiState === 'ready') {
+    // The containers are detached, so nothing dies with this process — stop
+    // them explicitly or Ctrl-C leaves ~4 GB of models resident. Synchronous:
+    // process.exit() right after would otherwise outrun an async stop.
+    process.stderr.write(`${c.ai}[ai]${c.reset} stopping containers…\n`)
+    spawnSync('docker', [...aiCompose, 'stop'], { cwd: root, stdio: 'ignore' })
+  }
   process.exit(code)
 }
 process.on('SIGINT', () => shutdown(0))
@@ -156,6 +172,36 @@ const trailbase = run(
 run('web', c.web, 'pnpm', ['--filter', '@tote/web', 'dev'], { cwd: root })
 // Terminates TLS on 3000/4000 and forwards to the two above.
 run('tls', c.tls, 'caddy', ['run', '--config', join(root, 'Caddyfile')], { cwd: root })
+
+/*
+  The AI stack (Open WebUI + Ollama) boots detached rather than as a managed
+  child: its health-check chatter would drown the dev console, and compose
+  containers survive this process anyway — shutdown() stops them explicitly.
+  Unavailable Docker is a warning, not a failure: the voice loop still works
+  with FAKE_AI=1, and everything else doesn't need AI at all. Models and env
+  come from the root .env (MODEL_CLASSIFY / MODEL_TRANSCRIBE).
+*/
+if (aiWanted) {
+  const up = spawn('docker', [...aiCompose, 'up', '-d'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] })
+  let errors = ''
+  up.stderr.on('data', (chunk) => (errors += chunk.toString()))
+  up.on('error', () => {
+    aiState = 'unavailable (docker not installed)'
+    process.stderr.write(`${c.warn}[ai] docker not found — voice loop needs FAKE_AI=1${c.reset}\n`)
+  })
+  up.on('close', (code) => {
+    if (shuttingDown) return
+    if (code === 0) {
+      aiState = 'ready'
+      process.stdout.write(`${c.ai}[ai]${c.reset} Open WebUI + Ollama up at ${AI_URL}\n`)
+    } else {
+      aiState = 'failed to start'
+      const hint = errors.includes('daemon') ? ' — is Docker running?' : ''
+      process.stderr.write(`${c.warn}[ai] stack failed to start${hint} (--no-ai silences this)${c.reset}\n`)
+      process.stderr.write(`${c.dim}${errors.trim().split('\n').slice(-3).join('\n')}${c.reset}\n`)
+    }
+  })
+}
 
 let credentials = readCredentials()
 let bannerShown = false
