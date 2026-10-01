@@ -14,7 +14,9 @@
  */
 import { initClient, FetchError, type Client } from 'trailbase'
 
-const TRAILBASE_INTERNAL_URL = process.env.TRAILBASE_INTERNAL_URL ?? 'http://localhost:4000'
+// Default matches `pnpm dev`: the dev TrailBase listens on 4100 in plain HTTP
+// (Caddy owns 4000 and only speaks TLS, which Node's fetch won't trust).
+const TRAILBASE_INTERNAL_URL = process.env.TRAILBASE_INTERNAL_URL ?? 'http://localhost:4100'
 
 export function openWebUiUrl(): string {
   return process.env.OPENWEBUI_URL ?? 'https://ai.tote.markets'
