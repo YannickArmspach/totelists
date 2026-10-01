@@ -36,7 +36,7 @@ https://trailbase.io/install.sh | bash`), the Vite dev server, Caddy, and the
 local AI stack (Open WebUI + Ollama via Docker, stopped again on Ctrl-C —
 skip it with `pnpm dev --no-ai` + `FAKE_AI=1`), and prints the admin
 credentials banner. App on https://localhost:3000, TrailBase admin on
-https://localhost:4000/_/admin/, Open WebUI on http://localhost:5100.
+https://localhost:4000/_/admin/, Open WebUI on https://localhost:5000.
 
 **Why dev is HTTPS.** The app holds one permanent SSE stream per collection —
 seven — against the TrailBase origin. HTTP/1.1 browsers allow six connections

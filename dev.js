@@ -27,7 +27,7 @@ const authComponent = join(tbDir, 'traildepot', 'wasm', 'trailbase_auth_ui_compo
 const WEB_URL = 'https://localhost:3000'
 const TB_URL = 'https://localhost:4000'
 const TB_ADDRESS = 'localhost:4100' // Vite's own port lives in apps/web/package.json.
-const AI_URL = 'http://localhost:5100' // Open WebUI; Ollama stays compose-internal.
+const AI_URL = 'https://localhost:5000' // Open WebUI via Caddy; Ollama stays compose-internal.
 
 // The AI stack is Docker-based and optional: --no-ai skips it (pair with
 // FAKE_AI=1 in apps/web/.env for an offline voice loop).
@@ -194,6 +194,7 @@ if (aiWanted) {
     if (code === 0) {
       aiState = 'ready'
       process.stdout.write(`${c.ai}[ai]${c.reset} Open WebUI + Ollama up at ${AI_URL}\n`)
+      // (the app's server routes dial 5100 directly — see Caddyfile)
     } else {
       aiState = 'failed to start'
       const hint = errors.includes('daemon') ? ' — is Docker running?' : ''

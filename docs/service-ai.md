@@ -111,7 +111,7 @@ boot** — restart `pnpm dev` after editing it.
 | `MODEL_CLASSIFY` | `qwen3:1.7b` | the model Ollama pulls at boot (and the one the app asks for — set the same value on both sides) |
 | `MODEL_TRANSCRIBE` | `small` | faster-whisper model (int8, CPU); also a build arg that pre-bakes it into the image |
 | `OPENWEBUI_SECRET_KEY` | *(empty → key persisted in the volume)* | JWT signing key (`WEBUI_SECRET_KEY`). Never use a `:?` guard: the platform's compose pull phase interpolates **before** secrets are injected |
-| `OPENWEBUI_PUBLIC_URL` | `http://localhost:5100` | `WEBUI_URL` |
+| `OPENWEBUI_PUBLIC_URL` | `http://localhost:5100` | `WEBUI_URL` — browser-facing; under `pnpm dev` Caddy serves it at `https://localhost:5000` (set in `.env`) |
 | `OLLAMA_CONTEXT_LENGTH` | `8192` | lower to 4096 if RAM is tight |
 
 Baked-in flags worth knowing: `ENABLE_API_KEYS` (plural — the v0.11.4 name) +
@@ -201,7 +201,8 @@ resident.
 
 **Local**: `docker compose -f docker-compose.ai.yml up --build` (models land
 in the volumes on first boot), then bootstrap once against
-`http://localhost:5100`: first `POST /api/v1/auths/signup` = admin → `POST
+`http://localhost:5100` (or `https://localhost:5000` under `pnpm dev` — Caddy,
+same +100 convention as the app): first `POST /api/v1/auths/signup` = admin → `POST
 /api/v1/auths/api_key` → put the key in `apps/web/.env`
 (`OPENWEBUI_ADMIN_API_KEY`). Create + verify `svc-ai@tote.markets` in the dev
 trail (register via API, then promote `unverified_email → email` in
