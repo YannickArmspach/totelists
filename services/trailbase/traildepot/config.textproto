@@ -105,4 +105,15 @@ record_apis: [{
   read_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id) OR EXISTS(SELECT 1 FROM totes AS t WHERE t.id = _ROW_.tote_id AND t.visibility = \'public\')"
   update_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
   delete_access_rule: "EXISTS(SELECT 1 FROM tote_members AS m WHERE m.tote_id = _ROW_.tote_id AND m.user_id = _USER_.id)"
+}, {
+  name: "ai_accounts"
+  table_name: "ai_accounts"
+  acl_authenticated: [CREATE, READ, UPDATE, DELETE]
+  # Server-only secrets (per-user Open WebUI API keys). Every operation is
+  # locked to the web server's service account; ordinary authenticated
+  # browsers get a 403 on every row. No subscriptions: nothing streams keys.
+  create_access_rule: "EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = \'svc-ai@tote.markets\')"
+  read_access_rule: "EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = \'svc-ai@tote.markets\')"
+  update_access_rule: "EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = \'svc-ai@tote.markets\')"
+  delete_access_rule: "EXISTS(SELECT 1 FROM _user AS u WHERE u.id = _USER_.id AND u.email = \'svc-ai@tote.markets\')"
 }]

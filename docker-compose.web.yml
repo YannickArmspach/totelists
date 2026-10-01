@@ -6,7 +6,7 @@
 # here rather than in apps/web/.
 #
 # The VITE_* args come from the Temps environment variables; they are baked
-# into the client bundle at build time. WHISPER_/MERIDIAN_ keys are runtime
+# into the client bundle at build time. OPENWEBUI_/TOTE_SVC_ values are runtime
 # env, never build args. Local development uses docker-compose.yml instead.
 name: tote_web
 
@@ -19,10 +19,14 @@ services:
         VITE_TRAILBASE_URL: ${VITE_TRAILBASE_URL}
         VITE_SITE_URL: ${VITE_SITE_URL}
     environment:
-      WHISPER_URL: ${WHISPER_URL:-https://whisper-production.dev.ynk.one}
-      WHISPER_API_KEY: ${WHISPER_API_KEY}
-      MERIDIAN_URL: ${MERIDIAN_URL:-https://meridian.dev.ynk.one}
-      MERIDIAN_API_KEY: ${MERIDIAN_API_KEY}
+      OPENWEBUI_URL: ${OPENWEBUI_URL:-https://ai.tote.markets}
+      OPENWEBUI_ADMIN_API_KEY: ${OPENWEBUI_ADMIN_API_KEY}
+      OPENWEBUI_CLASSIFY_MODEL: ${OPENWEBUI_CLASSIFY_MODEL:-qwen3:1.7b}
+      # Separate stacks on the deploy host, so TrailBase is dialed through its
+      # public domain rather than a compose-internal hostname.
+      TRAILBASE_INTERNAL_URL: ${TRAILBASE_INTERNAL_URL:-https://api.tote.markets}
+      TOTE_SVC_EMAIL: ${TOTE_SVC_EMAIL}
+      TOTE_SVC_PASSWORD: ${TOTE_SVC_PASSWORD}
     ports:
       # Host port 3100: the deploy host's loopback is shared by several
       # stacks and the default web port is taken there.

@@ -29,10 +29,16 @@ services:
         VITE_TRAILBASE_URL: ${VITE_TRAILBASE_URL:-http://localhost:4000}
         VITE_SITE_URL: ${VITE_SITE_URL:-http://localhost:3000}
     environment:
-      WHISPER_URL: ${WHISPER_URL:-https://whisper-production.dev.ynk.one}
-      WHISPER_API_KEY: ${WHISPER_API_KEY:-}
-      MERIDIAN_URL: ${MERIDIAN_URL:-https://meridian.dev.ynk.one}
-      MERIDIAN_API_KEY: ${MERIDIAN_API_KEY:-}
+      # AI goes through Open WebUI (see docker-compose.ai.yml). Defaults point
+      # at production so a laptop doesn't need 2 GB of local models; to run AI
+      # locally, start that stack and set OPENWEBUI_URL=http://localhost:5100.
+      OPENWEBUI_URL: ${OPENWEBUI_URL:-https://ai.tote.markets}
+      OPENWEBUI_ADMIN_API_KEY: ${OPENWEBUI_ADMIN_API_KEY:-}
+      OPENWEBUI_CLASSIFY_MODEL: ${OPENWEBUI_CLASSIFY_MODEL:-qwen3:1.7b}
+      # Server-to-TrailBase: same network here, so the internal hostname.
+      TRAILBASE_INTERNAL_URL: ${TRAILBASE_INTERNAL_URL:-http://trailbase:4000}
+      TOTE_SVC_EMAIL: ${TOTE_SVC_EMAIL:-}
+      TOTE_SVC_PASSWORD: ${TOTE_SVC_PASSWORD:-}
       FAKE_AI: ${FAKE_AI:-}
     ports:
       - '127.0.0.1:3000:3000'

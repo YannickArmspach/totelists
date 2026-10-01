@@ -1,0 +1,85 @@
+# The self-hosted AI stack — what the Temps `tote-ai` project deploys (preset
+# docker-compose, composePath pointing at this file, root directory: repository
+# root — the platform's compose security policy forbids a build context that
+# escapes the project directory, hence this file lives here).
+#
+# Also runnable locally: docker compose -f docker-compose.ai.yml up --build
+# (set OPENWEBUI_SECRET_KEY in .env first).
+#
+# Open WebUI is the only exposed service; Ollama is reachable solely over the
+# compose network. Every web-app call carries a per-user Open WebUI API key,
+# so usage is attributed per user in the admin panel.
+name: tote_ai
+
+services:
+  ollama:
+    build: ./services/ollama
+    # No ports: only open-webui talks to it.
+    environment:
+      # Keep the triage model resident; a 1.7b model is cheap to hold.
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_NUM_PARALLEL: '1'
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ['CMD', 'ollama', 'ls']
+      interval: 10s
+      timeout: 5s
+      # Generous: the first boot pulls ~1.4 GB of model weights.
+      retries: 30
+
+  open-webui:
+    build: ./services/open-webui
+    ports:
+      # Host port 5100: the deploy host's loopback is shared by several
+      # stacks (web 3100, api 4100); Temps routes ai.tote.markets here.
+      - '127.0.0.1:5100:8080'
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      ENABLE_OPENAI_API: 'false'
+      # JWT signing key — explicit so tokens survive container recreation.
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:?set OPENWEBUI_SECRET_KEY}
+      # Per-user API keys: the plural form is what v0.11.4 reads; the
+      # singular is harmless insurance against version drift.
+      ENABLE_API_KEYS: 'true'
+      ENABLE_API_KEY: 'true'
+      USER_PERMISSIONS_FEATURES_API_KEYS: 'true'
+      # Models are admin-only by default; without this a user's first classify
+      # dies on "Model not found". Every account here is a Tote user, so all
+      # models are for everyone.
+      BYPASS_MODEL_ACCESS_CONTROL: 'true'
+      # Each Tote user gets their own account; let them use RAG/knowledge.
+      USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS: 'true'
+      # Built-in faster-whisper STT (the model is pre-baked in the image).
+      WHISPER_MODEL: ${OPENWEBUI_WHISPER_MODEL:-small}
+      WHISPER_COMPUTE_TYPE: int8
+      # No background LLM chatter per UI message, no update pings.
+      ENABLE_VERSION_UPDATE_CHECK: 'false'
+      ENABLE_TITLE_GENERATION: 'false'
+      ENABLE_TAGS_GENERATION: 'false'
+      ENABLE_FOLLOW_UP_GENERATION: 'false'
+      ENABLE_SEARCH_QUERY_GENERATION: 'false'
+      ENABLE_RETRIEVAL_QUERY_GENERATION: 'false'
+      WEBUI_URL: ${OPENWEBUI_PUBLIC_URL:-http://localhost:5100}
+    volumes:
+      - open-webui:/app/backend/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  ollama:
+  open-webui:

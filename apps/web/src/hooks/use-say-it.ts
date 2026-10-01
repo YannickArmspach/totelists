@@ -13,7 +13,7 @@ import { useCallback, useState } from 'react'
 
 import { departmentsCollection, itemsCollection } from '#/db/collections'
 import { attachDepartment } from '#/lib/catalog'
-import { currentUserId } from '#/lib/auth'
+import { client, currentUserId } from '#/lib/auth'
 import { newId } from '#/db/ids'
 import { getLocale } from '#/paraglide/runtime'
 import type { ClassifyMarket, ParsedItem } from '#/lib/classify/schema'
@@ -30,9 +30,11 @@ async function classifyAndInsert(
   toteId: string,
   markets: ClassifyMarket[],
 ): Promise<number> {
+  // The TrailBase token identifies the speaker: the AI routes bill the call to
+  // their personal Open WebUI account and reject anonymous requests.
   const response = await fetch('/api/classify', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { ...client.headers(), 'content-type': 'application/json' },
     body: JSON.stringify({ transcript, markets }),
   })
   if (!response.ok) throw new Error(`classify ${response.status}`)
@@ -131,7 +133,11 @@ export function useSayIt(toteId: string | null, markets: ClassifyMarket[]) {
           Paraglide's codes are ISO-639-1, which is what Whisper wants.
         */
         form.append('language', getLocale())
-        const response = await fetch('/api/transcribe', { method: 'POST', body: form })
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: client.headers(),
+          body: form,
+        })
         if (!response.ok) throw new Error(`transcribe ${response.status}`)
         const { text } = (await response.json()) as { text: string }
         if (!text.trim()) throw new Error('empty transcript')

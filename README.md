@@ -3,9 +3,10 @@
 *Say it, we bag it.*
 
 Voice-first shared shopping lists. Speak a shopping note, Whisper transcribes
-it, Claude splits it into items and routes each one to the right market and
-department. Lists sync live between members of a **tote** (a shared shopping
-space — private with an invite link, or public and joinable by anyone).
+it, a local LLM splits it into items and routes each one to the right market
+and department. Lists sync live between members of a **tote** (a shared
+shopping space — private with an invite link, or public and joinable by
+anyone).
 
 ## Stack
 
@@ -14,15 +15,18 @@ space — private with an invite link, or public and joinable by anyone).
   (EN/FR), installable PWA.
 - **services/trailbase** — [TrailBase](https://trailbase.io) (SQLite): auth,
   record APIs with row-level access rules, realtime subscriptions.
-- External: Whisper (speech-to-text) and Meridian (Claude gateway), both
-  proxied by the web app's server routes so their keys stay server-side.
+- **services/ollama** + **services/open-webui** — the self-hosted AI stack
+  (`docker-compose.ai.yml`): Open WebUI fronts Ollama (`qwen3:1.7b` triage)
+  and built-in faster-whisper (speech-to-text). The web app's server routes
+  proxy both and provision one Open WebUI account per Tote user (key stored in
+  the `ai_accounts` table, server-only), so usage is attributed per user.
 
 ## Development
 
 ```sh
 pnpm install
 brew install caddy && caddy trust           # local HTTPS, once — see below
-cp apps/web/.env.example apps/web/.env   # set WHISPER_API_KEY / MERIDIAN_API_KEY, or FAKE_AI=1
+cp apps/web/.env.example apps/web/.env   # set the OPENWEBUI_/TOTE_SVC_ values, or FAKE_AI=1
 pnpm dev
 ```
 

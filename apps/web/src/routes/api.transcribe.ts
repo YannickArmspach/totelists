@@ -1,15 +1,18 @@
 /**
- * Proxy to the Whisper service.
+ * Proxy to Open WebUI's built-in faster-whisper transcription.
  *
- * The browser can't call Whisper itself: the service has no CORS headers and a
- * single static API key that must never reach a devtools tab. The blob lands
- * here, and this route forwards it with the key from the server's environment.
+ * The browser can't call it directly: the per-user API keys live in TrailBase
+ * and must never reach a devtools tab. The blob lands here with the caller's
+ * TrailBase JWT; this route resolves (or provisions) their Open WebUI account
+ * and forwards the audio with their personal key, so usage is attributed to
+ * them.
  *
- * Whisper answers 503 while its model is still loading after a cold start, so
- * that one status is retried; everything else is the caller's problem.
+ * A 503 while the model is still loading after a cold start is retried;
+ * everything else is the caller's problem.
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { filenameForMime } from '#/lib/audio'
+import { getOrProvisionApiKey, openWebUiUrl, verifyCaller } from '#/lib/server/ai-account'
 
 const MAX_BYTES = 15 * 1024 * 1024
 const COLD_START_RETRIES = 3
@@ -23,9 +26,8 @@ async function transcribe(request: Request): Promise<Response> {
     return Response.json({ text: FAKE_TRANSCRIPT })
   }
 
-  const apiKey = process.env.WHISPER_API_KEY
-  if (!apiKey) return Response.json({ error: 'WHISPER_API_KEY is not set' }, { status: 500 })
-  const baseUrl = process.env.WHISPER_URL ?? 'https://whisper-production.dev.ynk.one'
+  const caller = await verifyCaller(request)
+  if (!caller) return Response.json({ error: 'unauthorized' }, { status: 401 })
 
   const length = Number(request.headers.get('content-length') ?? 0)
   if (length > MAX_BYTES) return Response.json({ error: 'audio too large' }, { status: 413 })
@@ -38,13 +40,21 @@ async function transcribe(request: Request): Promise<Response> {
   if (audio.size > MAX_BYTES) return Response.json({ error: 'audio too large' }, { status: 413 })
   const language = incoming.get('language')
 
+  let apiKey: string
+  try {
+    apiKey = await getOrProvisionApiKey(caller)
+  } catch (err) {
+    console.error('ai account provisioning failed:', err)
+    return Response.json({ error: 'ai account unavailable' }, { status: 502 })
+  }
+
   const form = new FormData()
   form.append('file', audio, filenameForMime(audio.type))
   if (typeof language === 'string' && language) form.append('language', language)
 
   let upstream: Response | undefined
   for (let attempt = 0; attempt < COLD_START_RETRIES; attempt++) {
-    upstream = await fetch(`${baseUrl}/v1/audio/transcriptions`, {
+    upstream = await fetch(`${openWebUiUrl()}/api/v1/audio/transcriptions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,

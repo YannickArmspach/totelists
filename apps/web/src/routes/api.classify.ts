@@ -1,14 +1,15 @@
 /**
- * One Meridian call per transcript: split the note into items and route each
- * to a market/department of the active tote.
+ * One model call per transcript: split the note into items and route each to a
+ * market/department of the active tote.
  *
- * Meridian specifics that are easy to get wrong (see the plan):
- * - `x-meridian-agent: passthrough`, or an unrecognized client is given the
- *   default agent adapter and ~28 KB of coding-assistant system prompt.
- * - `x-meridian-source: fork-<uuid>` per request, or concurrent calls with
- *   similar openings collide on one session fingerprint.
- * - `output_config.format` (structured output) cannot be combined with tools;
- *   the reply's single text block IS the validated JSON.
+ * The call goes through Open WebUI's authenticated Ollama proxy with the
+ * caller's personal API key (provisioned on first use), not the OpenAI-style
+ * /api/chat/completions: the proxy forwards Ollama-native fields verbatim,
+ * which this route depends on twice —
+ * - `format`: the JSON schema enforced by constrained decoding, so the reply
+ *   body IS the validated JSON;
+ * - `think: false`: qwen3 is a thinking model, and reasoning tokens would
+ *   multiply latency for zero triage benefit.
  */
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -20,8 +21,10 @@ import {
   type ParsedItem,
 } from '#/lib/classify/schema'
 import { buildClassifyPrompt } from '#/lib/classify/prompt'
+import { getOrProvisionApiKey, openWebUiUrl, verifyCaller } from '#/lib/server/ai-account'
 
-const MODEL = 'claude-haiku-4-5'
+const COLD_START_RETRIES = 3
+const RETRY_DELAY_MS = 2000
 
 function fakeItems(markets: ClassifyMarket[]): ParsedItem[] {
   const market = markets[0]
@@ -62,34 +65,52 @@ async function classify(request: Request): Promise<Response> {
     return Response.json({ items: fakeItems(markets) })
   }
 
-  const apiKey = process.env.MERIDIAN_API_KEY
-  if (!apiKey) return Response.json({ error: 'MERIDIAN_API_KEY is not set' }, { status: 500 })
-  const baseUrl = process.env.MERIDIAN_URL ?? 'https://meridian.dev.ynk.one'
+  const caller = await verifyCaller(request)
+  if (!caller) return Response.json({ error: 'unauthorized' }, { status: 401 })
 
-  const upstream = await fetch(`${baseUrl}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'x-meridian-agent': 'passthrough',
-      'x-meridian-source': `fork-${crypto.randomUUID()}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 4096,
-      system: buildClassifyPrompt(markets),
-      messages: [{ role: 'user', content: body.transcript }],
-      output_config: { format: { type: 'json_schema', schema: CLASSIFY_SCHEMA } },
-    }),
-  })
-
-  if (!upstream.ok) {
-    return Response.json({ error: `classification failed (${upstream.status})` }, { status: 502 })
+  let apiKey: string
+  try {
+    apiKey = await getOrProvisionApiKey(caller)
+  } catch (err) {
+    console.error('ai account provisioning failed:', err)
+    return Response.json({ error: 'ai account unavailable' }, { status: 502 })
   }
 
-  const message = (await upstream.json()) as { content?: Array<{ type: string; text?: string }> }
-  const text = message.content?.find((block) => block.type === 'text')?.text
+  let upstream: Response | undefined
+  for (let attempt = 0; attempt < COLD_START_RETRIES; attempt++) {
+    upstream = await fetch(`${openWebUiUrl()}/ollama/api/chat`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENWEBUI_CLASSIFY_MODEL ?? 'qwen3:1.7b',
+        messages: [
+          { role: 'system', content: buildClassifyPrompt(markets) },
+          { role: 'user', content: body.transcript },
+        ],
+        stream: false,
+        think: false,
+        format: CLASSIFY_SCHEMA,
+        options: { temperature: 0 },
+        keep_alive: '24h',
+      }),
+    })
+    // The first call after an Ollama restart loads the model; wait it out.
+    if (upstream.status !== 503 && upstream.status !== 500) break
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+  }
+
+  if (!upstream || !upstream.ok) {
+    return Response.json(
+      { error: `classification failed (${upstream?.status ?? 'no response'})` },
+      { status: 502 },
+    )
+  }
+
+  const reply = (await upstream.json()) as { message?: { content?: string } }
+  const text = reply.message?.content
   if (!text) return Response.json({ error: 'empty classification' }, { status: 502 })
 
   let parsed
