@@ -39,8 +39,11 @@ services:
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       ENABLE_OPENAI_API: 'false'
-      # JWT signing key — explicit so tokens survive container recreation.
-      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:?set OPENWEBUI_SECRET_KEY}
+      # JWT signing key — explicit so tokens survive container recreation. No
+      # `:?` guard: the platform's compose pull phase interpolates BEFORE
+      # secrets are injected, and a hard fail there kills the deploy. Left
+      # empty, the image falls back to a key persisted in the data volume.
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-}
       # Per-user API keys: the plural form is what v0.11.4 reads; the
       # singular is harmless insurance against version drift.
       ENABLE_API_KEYS: 'true'
