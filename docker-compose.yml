@@ -34,7 +34,7 @@ services:
       # locally, start that stack and set OPENWEBUI_URL=http://localhost:5100.
       OPENWEBUI_URL: ${OPENWEBUI_URL:-https://ai.tote.markets}
       OPENWEBUI_ADMIN_API_KEY: ${OPENWEBUI_ADMIN_API_KEY:-}
-      OPENWEBUI_CLASSIFY_MODEL: ${OPENWEBUI_CLASSIFY_MODEL:-qwen3:1.7b}
+      MODEL_CLASSIFY: ${MODEL_CLASSIFY:-qwen3:4b}
       # Server-to-TrailBase: same network here, so the internal hostname.
       TRAILBASE_INTERNAL_URL: ${TRAILBASE_INTERNAL_URL:-http://trailbase:4000}
       TOTE_SVC_EMAIL: ${TOTE_SVC_EMAIL:-}

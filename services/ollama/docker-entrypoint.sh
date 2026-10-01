@@ -4,7 +4,7 @@
 # with a warm volume never touches the network.
 set -eu
 
-MODELS="${OLLAMA_PULL_MODELS:-qwen3:1.7b}"
+MODELS="${OLLAMA_PULL_MODELS:-qwen3:4b}"
 
 ollama serve &
 pid=$!

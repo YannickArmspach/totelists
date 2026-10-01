@@ -5,7 +5,7 @@ The voice loop's two AI steps are self-hosted and sit behind one gateway:
 ```
 browser ──(blob / transcript + TrailBase JWT)──▶ apps/web server routes
     /api/transcribe ─▶ Open WebUI /api/v1/audio/transcriptions   (faster-whisper)
-    /api/classify  ──▶ Open WebUI /ollama/api/chat ─▶ Ollama      (qwen3:1.7b)
+    /api/classify  ──▶ Open WebUI /ollama/api/chat ─▶ Ollama      (qwen3:4b)
 ```
 
 - **Ollama** serves the triage model. It is never exposed: only Open WebUI
@@ -73,7 +73,7 @@ unknown fields verbatim, which the route depends on:
 
 ```jsonc
 {
-  "model": "qwen3:1.7b",          // OPENWEBUI_CLASSIFY_MODEL
+  "model": "qwen3:4b",            // MODEL_CLASSIFY
   "messages": [ { "role": "system", "content": "<buildClassifyPrompt(markets)>" },
                 { "role": "user",   "content": "<transcript>" } ],
   "stream": false,
@@ -96,7 +96,7 @@ The reply is `{ message: { content } }`; the route then runs the usual
 |---|---|---|
 | `OPENWEBUI_URL` | `https://ai.tote.markets` | gateway origin |
 | `OPENWEBUI_ADMIN_API_KEY` | — | admin key, used only to provision accounts |
-| `OPENWEBUI_CLASSIFY_MODEL` | `qwen3:1.7b` | triage model |
+| `MODEL_CLASSIFY` | `qwen3:4b` | triage model |
 | `TRAILBASE_INTERNAL_URL` | `http://localhost:4100` | server→TrailBase (dev trail; **4000 is Caddy, TLS-only, Node rejects it**). Compose: `http://trailbase:4000`; prod: `https://api.tote.markets` |
 | `TOTE_SVC_EMAIL` / `TOTE_SVC_PASSWORD` | — | TrailBase service account |
 | `FAKE_AI` | — | `1` = canned transcribe/classify, no stack needed |
@@ -108,10 +108,10 @@ boot** — restart `pnpm dev` after editing it.
 
 | Var | Default | Role |
 |---|---|---|
+| `MODEL_CLASSIFY` | `qwen3:4b` | the model Ollama pulls at boot (and the one the app asks for — set the same value on both sides) |
+| `MODEL_TRANSCRIBE` | `large-v3-turbo` | faster-whisper model (int8, CPU); also a build arg that pre-bakes it into the image |
 | `OPENWEBUI_SECRET_KEY` | *(empty → key persisted in the volume)* | JWT signing key (`WEBUI_SECRET_KEY`). Never use a `:?` guard: the platform's compose pull phase interpolates **before** secrets are injected |
 | `OPENWEBUI_PUBLIC_URL` | `http://localhost:5100` | `WEBUI_URL` |
-| `OPENWEBUI_WHISPER_MODEL` | `small` | faster-whisper model (int8, CPU) |
-| `OLLAMA_PULL_MODELS` | `qwen3:1.7b` | space-separated list pulled at boot |
 | `OLLAMA_CONTEXT_LENGTH` | `8192` | lower to 4096 if RAM is tight |
 
 Baked-in flags worth knowing: `ENABLE_API_KEYS` (plural — the v0.11.4 name) +
@@ -130,17 +130,25 @@ into the image so the first transcription doesn't download 460 MB).
 
 ## How to change whisper and qwen ?
 
-Both models are plain env vars — no code change, no rebuild of the app.
+Two env vars, nothing else:
+
+```sh
+MODEL_CLASSIFY=qwen3:4b          # triage (Ollama) — set on tote-ai AND tote-web
+MODEL_TRANSCRIBE=large-v3-turbo  # speech-to-text (faster-whisper) — set on tote-ai
+```
+
+Change the value(s), redeploy the project(s) that carry them, done. Locally:
+same vars in `.env` (one file feeds both the stack and the app), restart.
 
 ### Triage model (Ollama) — the possibilities
 
 | Model (Ollama tag) | Disk / resident RAM | Classification¹ | French | CPU speed | Notes |
 |---|---|---|---|---|---|
 | `qwen3:0.6b` | 0.5 / ~1 GB | 89.2 % | weak | fastest | emergency fallback only |
-| `qwen3:1.7b` **(current)** | 1.4 / ~2.3 GB | 91.3 % | good | fast | loses quantities, occasional wrong department |
+| `qwen3:1.7b` | 1.4 / ~2.3 GB | 91.3 % | good | fast | loses quantities, occasional wrong department |
 | `llama3.2:3b` | 2.0 / ~2.8 GB | 92.1 % | weaker than qwen/gemma | fast | not a thinking model |
 | `gemma3:4b` | 3.3 / ~3.5 GB | 92.8 % | excellent | medium | best multilingual at this size; not a thinking model |
-| `qwen3:4b` | 2.6 / ~3.5 GB | 93.7 % | very good | medium | **recommended upgrade** if 1.7b quality disappoints |
+| `qwen3:4b` **(current)** | 2.6 / ~3.5 GB | 93.7 % | very good | medium | the default |
 | `qwen3:8b` | 5.2 / ~6 GB | 95.1 % | very good | slow on this CPU | needs the env memory limit raised to ≥ 8 GB |
 
 ¹ small-model classification benchmark scores, indicative only.
@@ -149,47 +157,40 @@ Any Ollama model works — the route sends `think: false` (needed by the qwen3
 family, ignored by the others) and native `format` constrained decoding, which
 every Ollama model supports.
 
-**Procedure:**
-
-1. Pull it on the stack: add the tag to `OLLAMA_PULL_MODELS` on the `tote-ai`
-   Temps env (space-separated, e.g. `"qwen3:1.7b qwen3:4b"`), redeploy
-   `tote-ai`. The entrypoint pulls idempotently (`ollama show || ollama
-   pull`) — warm volumes never re-download.
-2. Point the app at it: set `OPENWEBUI_CLASSIFY_MODEL=<tag>` on `tote-web`,
-   redeploy `tote-web`. (Locally: same vars in `.env` / `apps/web/.env`,
-   restart.)
-3. Mind the RAM column: the env memory limit is 4 GB
-   (`temps environments resources production -p tote-ai --memory …`); a model
-   that doesn't fit dies with `signal: killed`. ≥ `qwen3:8b` also means
-   raising the limit.
-4. Keep only what you use in `OLLAMA_PULL_MODELS` — `OLLAMA_MAX_LOADED_MODELS=1`
-   protects RAM, but dead weights still eat the volume's disk.
+**Procedure:** set `MODEL_CLASSIFY=<tag>` on **both** `tote-ai` (drives what
+Ollama pulls at boot — idempotent, warm volumes never re-download) and
+`tote-web` (what the app asks for), redeploy both. Mind the RAM column: the
+env memory limit (`temps environments resources production -p tote-ai
+--memory …`) must fit the resident size, or the load dies with
+`signal: killed`; ≥ `qwen3:8b` means raising it. Old weights stay in the
+`ollama` volume (disk, not RAM — `OLLAMA_MAX_LOADED_MODELS=1`).
 
 ### Whisper model (faster-whisper) — the possibilities
 
-| `OPENWEBUI_WHISPER_MODEL` | RAM (int8) | French accuracy | CPU speed (short memo) | Notes |
+| `MODEL_TRANSCRIBE` | RAM (int8) | French accuracy | CPU speed (short memo) | Notes |
 |---|---|---|---|---|
 | `tiny` | ~150 MB | poor | ~2 s | product names mangled; avoid |
 | `base` | ~250 MB | mediocre | ~4 s | RAM-squeeze fallback |
-| `small` **(current)** | ~600 MB | decent | ~9 s | pre-baked in the image |
+| `small` | ~600 MB | decent | ~9 s | the light option |
 | `medium` | ~1.5 GB | good | ~25 s | dominated by turbo — skip |
-| `large-v3-turbo` | ~1.6 GB | very good | ~15 s | **recommended upgrade** for French |
+| `large-v3-turbo` **(current)** | ~1.6 GB | very good | ~15 s | the default — best French/speed trade-off |
 | `large-v3` | ~3 GB | best | ~60 s+ | only worth it with a GPU |
 
 Multilingual quality ranking for French:
 `large-v3 > large-v3-turbo ≫ small > base > tiny`.
 
-**Procedure:** set `OPENWEBUI_WHISPER_MODEL=<name>` on `tote-ai` and redeploy
-(locally: `.env` + restart the stack). Only `small` is pre-baked in
-`services/open-webui/Dockerfile` — any other model downloads on its first
-transcription (one slow request); to pre-bake instead, change the model name
-in that Dockerfile's `RUN download_model(…)` line too.
+**Procedure:** set `MODEL_TRANSCRIBE=<name>` on `tote-ai` and redeploy
+(locally: `.env` + restart the stack). The same var is a build arg that
+pre-bakes the model into the image, so the rebuild ships it and the first
+transcription never blocks on a download.
 
 ### Reference latencies (prod CPU, ~8 tok/s)
 
-Classify ≈ 3 s warm, ≈ 12 s after a restart (model load); whisper `small`
-≈ 9 s for a short memo. `keep_alive: "24h"` + `OLLAMA_KEEP_ALIVE=-1` keep the
-triage model resident.
+With `qwen3:1.7b` + whisper `small`, measured: classify ≈ 3 s warm, ≈ 12 s
+after a restart (model load); transcription ≈ 9 s for a short memo. The
+current `qwen3:4b` + `large-v3-turbo` run roughly 2× slower per the tables
+above. `keep_alive: "24h"` + `OLLAMA_KEEP_ALIVE=-1` keep the triage model
+resident.
 
 ## Running it
 

@@ -16,7 +16,7 @@ anyone).
 - **services/trailbase** — [TrailBase](https://trailbase.io) (SQLite): auth,
   record APIs with row-level access rules, realtime subscriptions.
 - **services/ollama** + **services/open-webui** — the self-hosted AI stack
-  (`docker-compose.ai.yml`): Open WebUI fronts Ollama (`qwen3:1.7b` triage)
+  (`docker-compose.ai.yml`): Open WebUI fronts Ollama (`MODEL_CLASSIFY` triage)
   and built-in faster-whisper (speech-to-text). The web app's server routes
   proxy both and provision one Open WebUI account per Tote user (key stored in
   the `ai_accounts` table, server-only), so usage is attributed per user.

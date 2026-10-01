@@ -21,7 +21,7 @@ services:
     environment:
       OPENWEBUI_URL: ${OPENWEBUI_URL:-https://ai.tote.markets}
       OPENWEBUI_ADMIN_API_KEY: ${OPENWEBUI_ADMIN_API_KEY}
-      OPENWEBUI_CLASSIFY_MODEL: ${OPENWEBUI_CLASSIFY_MODEL:-qwen3:1.7b}
+      MODEL_CLASSIFY: ${MODEL_CLASSIFY:-qwen3:4b}
       # Separate stacks on the deploy host, so TrailBase is dialed through its
       # public domain rather than a compose-internal hostname.
       TRAILBASE_INTERNAL_URL: ${TRAILBASE_INTERNAL_URL:-https://api.tote.markets}
