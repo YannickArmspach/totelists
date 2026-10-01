@@ -8,5 +8,5 @@ FROM ghcr.io/open-webui/open-webui:v0.11.4
 # pre-downloaded into the path the app reads (WHISPER_MODEL_DIR default), and
 # the named volume mounted over /app/backend/data is seeded from the image on
 # first creation, so the first transcription doesn't block on the download.
-ARG MODEL_TRANSCRIBE=large-v3-turbo
+ARG MODEL_TRANSCRIBE=small
 RUN python -c "from faster_whisper.utils import download_model; download_model('${MODEL_TRANSCRIBE}', cache_dir='/app/backend/data/cache/whisper/models')"

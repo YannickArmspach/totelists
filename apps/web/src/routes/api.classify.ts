@@ -85,7 +85,7 @@ async function classify(request: Request): Promise<Response> {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.MODEL_CLASSIFY ?? 'qwen3:4b',
+        model: process.env.MODEL_CLASSIFY ?? 'qwen3:1.7b',
         messages: [
           { role: 'system', content: buildClassifyPrompt(markets) },
           { role: 'user', content: body.transcript },

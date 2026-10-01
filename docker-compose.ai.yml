@@ -17,7 +17,7 @@ services:
     # No ports: only open-webui talks to it.
     environment:
       # The triage model — the one knob to turn (same var feeds the web app).
-      OLLAMA_PULL_MODELS: ${MODEL_CLASSIFY:-qwen3:4b}
+      OLLAMA_PULL_MODELS: ${MODEL_CLASSIFY:-qwen3:1.7b}
       # Keep the triage model resident.
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
       OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
@@ -37,7 +37,7 @@ services:
       context: ./services/open-webui
       args:
         # Pre-bakes the whisper model into the image (see the Dockerfile).
-        MODEL_TRANSCRIBE: ${MODEL_TRANSCRIBE:-large-v3-turbo}
+        MODEL_TRANSCRIBE: ${MODEL_TRANSCRIBE:-small}
     ports:
       # Host port 5100: the deploy host's loopback is shared by several
       # stacks (web 3100, api 4100); Temps routes ai.tote.markets here.
@@ -62,7 +62,7 @@ services:
       # Each Tote user gets their own account; let them use RAG/knowledge.
       USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS: 'true'
       # Built-in faster-whisper STT (the model is pre-baked in the image).
-      WHISPER_MODEL: ${MODEL_TRANSCRIBE:-large-v3-turbo}
+      WHISPER_MODEL: ${MODEL_TRANSCRIBE:-small}
       WHISPER_COMPUTE_TYPE: int8
       # No background LLM chatter per UI message, no update pings.
       ENABLE_VERSION_UPDATE_CHECK: 'false'

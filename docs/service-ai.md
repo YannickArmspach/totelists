@@ -5,7 +5,7 @@ The voice loop's two AI steps are self-hosted and sit behind one gateway:
 ```
 browser ──(blob / transcript + TrailBase JWT)──▶ apps/web server routes
     /api/transcribe ─▶ Open WebUI /api/v1/audio/transcriptions   (faster-whisper)
-    /api/classify  ──▶ Open WebUI /ollama/api/chat ─▶ Ollama      (qwen3:4b)
+    /api/classify  ──▶ Open WebUI /ollama/api/chat ─▶ Ollama      (qwen3:1.7b)
 ```
 
 - **Ollama** serves the triage model. It is never exposed: only Open WebUI
@@ -73,7 +73,7 @@ unknown fields verbatim, which the route depends on:
 
 ```jsonc
 {
-  "model": "qwen3:4b",            // MODEL_CLASSIFY
+  "model": "qwen3:1.7b",          // MODEL_CLASSIFY
   "messages": [ { "role": "system", "content": "<buildClassifyPrompt(markets)>" },
                 { "role": "user",   "content": "<transcript>" } ],
   "stream": false,
@@ -96,7 +96,7 @@ The reply is `{ message: { content } }`; the route then runs the usual
 |---|---|---|
 | `OPENWEBUI_URL` | `https://ai.tote.markets` | gateway origin |
 | `OPENWEBUI_ADMIN_API_KEY` | — | admin key, used only to provision accounts |
-| `MODEL_CLASSIFY` | `qwen3:4b` | triage model |
+| `MODEL_CLASSIFY` | `qwen3:1.7b` | triage model |
 | `TRAILBASE_INTERNAL_URL` | `http://localhost:4100` | server→TrailBase (dev trail; **4000 is Caddy, TLS-only, Node rejects it**). Compose: `http://trailbase:4000`; prod: `https://api.tote.markets` |
 | `TOTE_SVC_EMAIL` / `TOTE_SVC_PASSWORD` | — | TrailBase service account |
 | `FAKE_AI` | — | `1` = canned transcribe/classify, no stack needed |
@@ -108,8 +108,8 @@ boot** — restart `pnpm dev` after editing it.
 
 | Var | Default | Role |
 |---|---|---|
-| `MODEL_CLASSIFY` | `qwen3:4b` | the model Ollama pulls at boot (and the one the app asks for — set the same value on both sides) |
-| `MODEL_TRANSCRIBE` | `large-v3-turbo` | faster-whisper model (int8, CPU); also a build arg that pre-bakes it into the image |
+| `MODEL_CLASSIFY` | `qwen3:1.7b` | the model Ollama pulls at boot (and the one the app asks for — set the same value on both sides) |
+| `MODEL_TRANSCRIBE` | `small` | faster-whisper model (int8, CPU); also a build arg that pre-bakes it into the image |
 | `OPENWEBUI_SECRET_KEY` | *(empty → key persisted in the volume)* | JWT signing key (`WEBUI_SECRET_KEY`). Never use a `:?` guard: the platform's compose pull phase interpolates **before** secrets are injected |
 | `OPENWEBUI_PUBLIC_URL` | `http://localhost:5100` | `WEBUI_URL` |
 | `OLLAMA_CONTEXT_LENGTH` | `8192` | lower to 4096 if RAM is tight |
@@ -133,12 +133,17 @@ into the image so the first transcription doesn't download 460 MB).
 Two env vars, nothing else:
 
 ```sh
-MODEL_CLASSIFY=qwen3:4b          # triage (Ollama) — set on tote-ai AND tote-web
-MODEL_TRANSCRIBE=large-v3-turbo  # speech-to-text (faster-whisper) — set on tote-ai
+MODEL_CLASSIFY=qwen3:1.7b   # triage (Ollama) — set on tote-ai AND tote-web
+MODEL_TRANSCRIBE=small      # speech-to-text (faster-whisper) — set on tote-ai
 ```
 
 Change the value(s), redeploy the project(s) that carry them, done. Locally:
 same vars in `.env` (one file feeds both the stack and the app), restart.
+
+Local A/B testing: pull extra candidates into the volume once
+(`docker exec tote_ai-ollama-1 ollama pull gemma3:4b`), then flip
+`MODEL_CLASSIFY` and restart — warm volumes never re-download, so switching
+between e.g. `qwen3:4b` and `gemma3:4b` is instant.
 
 ### Triage model (Ollama) — the possibilities
 
