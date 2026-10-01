@@ -93,7 +93,9 @@ async function classify(request: Request): Promise<Response> {
         stream: false,
         think: false,
         format: CLASSIFY_SCHEMA,
-        options: { temperature: 0 },
+        // num_predict caps a constrained-decoding loop: at the server's ~8
+        // tokens/s an unbounded repeat otherwise burns CPU for minutes.
+        options: { temperature: 0, num_predict: 2048 },
         keep_alive: '24h',
       }),
     })
