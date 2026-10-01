@@ -20,6 +20,7 @@ anyone).
   and built-in faster-whisper (speech-to-text). The web app's server routes
   proxy both and provision one Open WebUI account per Tote user (key stored in
   the `ai_accounts` table, server-only), so usage is attributed per user.
+  Full picture — accounts, API, config, model swaps: [docs/service-ai.md](docs/service-ai.md).
 
 ## Development
 
