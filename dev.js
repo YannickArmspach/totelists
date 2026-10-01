@@ -27,7 +27,8 @@ const authComponent = join(tbDir, 'traildepot', 'wasm', 'trailbase_auth_ui_compo
 const WEB_URL = 'https://localhost:3000'
 const TB_URL = 'https://localhost:4000'
 const TB_ADDRESS = 'localhost:4100' // Vite's own port lives in apps/web/package.json.
-const AI_URL = 'https://localhost:5000' // Open WebUI via Caddy; Ollama stays compose-internal.
+// 5001, not 5000: macOS AirPlay owns 5000. Ollama stays compose-internal.
+const AI_URL = 'https://localhost:5001'
 
 // The AI stack is Docker-based and optional: --no-ai skips it (pair with
 // FAKE_AI=1 in apps/web/.env for an offline voice loop).

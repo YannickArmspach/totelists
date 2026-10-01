@@ -29,11 +29,12 @@ https://localhost:4000 {
 	reverse_proxy localhost:4100
 }
 
-# Open WebUI, same +100 convention. For the BROWSER only (its admin UI, and
-# mirroring how prod serves it at https://ai.tote.markets): the web app's
-# server keeps calling http://localhost:5100 directly — Node's fetch does not
-# trust Caddy's local CA (the keychain is a browser/system thing), the exact
-# trap TRAILBASE_INTERNAL_URL already documents.
-https://localhost:5000 {
+# Open WebUI. 5001 and not the 5000 the +100 convention would give: macOS's
+# AirPlay Receiver (ControlCenter) squats 5000. For the BROWSER only (its
+# admin UI, mirroring how prod serves it at https://ai.tote.markets): the web
+# app's server keeps calling http://localhost:5100 directly — Node's fetch
+# does not trust Caddy's local CA (the keychain is a browser/system thing),
+# the exact trap TRAILBASE_INTERNAL_URL already documents.
+https://localhost:5001 {
 	reverse_proxy localhost:5100
 }
